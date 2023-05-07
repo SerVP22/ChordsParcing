@@ -44,7 +44,6 @@ def get_page_text(url = "https://amdm.ru/akkordi/ddt/166093/prosvistela/"):
         f.write("*" * 60)
         f.writelines("\n\n")
         search = send.find_all("pre")
-        # f.write(search.text)
         for i in search:
             print(i.text)
             f.write(i.text)
