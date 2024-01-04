@@ -5,7 +5,8 @@ import requests
 import re, os
 # from GUITK import MyTkApp
 import time
-import tkinter as tk
+#import tkinter as tk
+import ttkbootstrap as tk
 from tkinter import ttk
 
 
@@ -124,7 +125,7 @@ url = "https://amdm.in"
 # get_dict_liters(url)
 # print(get_artists_on_page())
 # get_page_text()
-app = tk.Tk()
+app = tk.Window(themename="superhero")
 
 app.title("Chords Parcing")
 app.geometry("800x600")
