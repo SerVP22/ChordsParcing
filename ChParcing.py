@@ -2,7 +2,7 @@ import json
 
 from bs4 import BeautifulSoup
 import requests
-import re, os
+#import re, os
 # from GUITK import MyTkApp
 import time
 #import tkinter as tk
@@ -107,27 +107,21 @@ def reload_artists(pr_bar, url):
     if dict_liters:
         dict_liters_len = len(dict_liters) # вычисляем количество литер
         count = 0
-
         for ident, link_lit in dict_liters.items():  # проходимся по словарю символов
             artist_dict = get_artists_on_page(link_lit)
-            #print(artist_dict)
             if artist_dict:
                 lit_lib = {}
                 for artist, link_art in artist_dict.items():  # проходимся по списку артистов
-                    lit_lib[artist] = [False, link_art]
-                    # {artist1: [False, link_art1], artist2: [...], ...}
-
+                    lit_lib[artist] = [link_art]
+                    # {artist1: [link_art1], artist2: [...], ...}
                 main_dict[ident] = [link_lit, lit_lib]
                 # {A:[link, {artist1: [False, link_art1], artist2: [False, link_art2], ...}], B:[...], ... }
-
                 del lit_lib
                 count += 1
                 v = int(count / dict_liters_len * 100)
-                #print(v)
                 pr_bar.configure(value=v)
                 pr_bar.update()
-
-                time.sleep(0.5)
+                # time.sleep(0.5)
         try:
             with open("main_data.json", "w") as f:
                 json.dump(main_dict, f)
@@ -148,9 +142,7 @@ def load_data_to_sheets(work_string, frame, main_data):
 
         temp_frame = ttk.Frame(book)
         temp_frame.pack(fill=tk.BOTH, expand=True)
-        book.add(temp_frame, text=work_string, underline=0)
-            # ttk.Label(temp_frame, text=f"test for {i} letter").pack()
-            # if i == "А":
+        book.add(temp_frame, text=work_string)
         tree = ttk.Treeview(temp_frame,
                                columns=("name", "check", "in_db", "link"),
                                show="headings",
@@ -166,13 +158,7 @@ def load_data_to_sheets(work_string, frame, main_data):
         tree.column("#4", stretch=tk.NO, width=400)
         try:
             for art in main_data[work_string][1]:
-                """if i == char:
-                    for artist, data_art in data[1].items():
-                        tree.insert("", tk.END, values=(artist,
-                                                             "-",
-                                                             in_db_gen(data_art[0]),
-                                                             data_art[1]))"""
-                tree.insert("", tk.END, values=(art, "-", "--", main_data[work_string][1][art][1]))
+                tree.insert("", tk.END, values=(art, "-", "--", main_data[work_string][1][art][0]))
         except Exception as msg:
             print("Нет данных:", msg)
         scroll = ttk.Scrollbar(temp_frame, command=tree.yview)
@@ -189,10 +175,7 @@ def load_data_to_sheets(work_string, frame, main_data):
             for i in work_string:
                 temp_frame = ttk.Frame(book)
                 temp_frame.pack(fill=tk.BOTH, expand=True)
-                book.add(temp_frame, text=i, underline=0)
-                # ttk.Label(temp_frame, text=f"test for {i} letter").pack()
-                # if i == "А":
-
+                book.add(temp_frame, text=i,)
                 tree = ttk.Treeview(temp_frame,
                                     columns=("name", "check", "in_db", "link"),
                                     show="headings",
@@ -215,7 +198,7 @@ def load_data_to_sheets(work_string, frame, main_data):
                                                                      "-",
                                                                      in_db_gen(data_art[0]),
                                                                      data_art[1]))"""
-                        tree.insert("", tk.END, values=(art, "-", "--", main_data[i][1][art][1]))
+                        tree.insert("", tk.END, values=(art, "-", "--", main_data[i][1][art][0]))
                 except Exception as msg:
                     print("Нет данных:", msg)
 
@@ -227,41 +210,27 @@ def load_data_to_sheets(work_string, frame, main_data):
             book.update()
 
 def init_GUI(main_url, main_data):
-
-    # get_dict_liters(url)
-    # print(get_artists_on_page())
-    # get_page_text()
     app = tk.Window(themename="superhero")
-
     app.title("Chords Parcing")
-    app.geometry("800x600")
+    app.geometry("1000x800")
     string_1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     string_2 = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
     string_3 = "0..9"
 
-
-    status_bar_text = "Загрузка данных из собственной базы данных..."
-
     #    ПАНЕЛЬ ОПЦИЙ
     up_frame = ttk.LabelFrame(app, text="Опции")
     up_frame.pack(fill=tk.BOTH, expand=False)
-    # self.upfr_label_pic = tk.Label(self.up_frame, height=3)
-    # self.upfr_label_pic.pack(side="left")
     pr_bar1 = ttk.Progressbar(up_frame, length=100)
     pr_bar1.pack(side="left")
     btn1 = ttk.Button(up_frame,
                       text="Обновить список артистов",
                       command=lambda: reload_artists(pr_bar=pr_bar1, url=main_url))
     btn1.pack(side="left")
-    #     ПАНЕЛЬ НАВИГАЦИИ
-    down_frame = ttk.LabelFrame(app, text="Исполнители", )
-    down_frame.pack(fill=tk.BOTH, expand=True)
-    status_bar = ttk.Frame(app)
-    status_bar_label = ttk.Label(status_bar, text=status_bar_text, borderwidth=10)
-    status_bar.pack(fill=tk.BOTH, expand=False)
-    status_bar_label.pack(side="left")
 
-    main_book = ttk.Notebook(down_frame, padding=5)
+    #     ПАНЕЛЬ НАВИГАЦИИ
+    middle_frame = ttk.LabelFrame(app, text="Исполнители", )
+    middle_frame.pack(fill=tk.BOTH, expand=True)
+    main_book = ttk.Notebook(middle_frame, padding=5)
     main_book.pack(expand=True, fill=tk.BOTH)
     frame1 = ttk.Frame(main_book)
     frame2 = ttk.Frame(main_book)
@@ -269,15 +238,19 @@ def init_GUI(main_url, main_data):
     frame1.pack(fill=tk.BOTH, expand=True)
     frame2.pack(fill=tk.BOTH, expand=True)
     frame3.pack(fill=tk.BOTH, expand=True)
-
     main_book.add(frame2, text="    Русские буквы (А..Я)    ")
     load_data_to_sheets(string_2, frame2, main_data)
-
     main_book.add(frame1, text="    Английские буквы (A..Z)    ")
     load_data_to_sheets(string_1, frame1, main_data)
-
     main_book.add(frame3, text="    Цифровые символы (0..9)    ")
     load_data_to_sheets(string_3, frame3, main_data)
+
+    #     СТРОКА СОСТОЯНИЯ
+    status_bar_text = "Загрузка данных из собственной базы данных..."
+    status_bar = ttk.Frame(app)
+    status_bar_label = ttk.Label(status_bar, text=status_bar_text, borderwidth=10)
+    status_bar.pack(fill=tk.BOTH, expand=False)
+    status_bar_label.pack(side="left")
 
     app.mainloop()
 
