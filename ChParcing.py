@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 import requests
 #import re, os
 # from GUITK import MyTkApp
-import time
+#import time
 #import tkinter as tk
 import ttkbootstrap as tk
 from tkinter import ttk
@@ -44,17 +44,44 @@ def get_all_artists_on_page(url):
     except:
         return None
 
+def get_all_songs_for_artist(url = "https://amdm.in/akkordi/aleksandr_marshal/"):
+    """
+    url: ссылка на страницу исполнителя
+    возвращает словарь {"Песня":"Ссылка", ...} для всех песен
+    """
+    def get_str_for_num(num):
+        if num>999:
+            print("Ого! Не может быть такого количества песен!")
+        else:
+            str_num = str(num)
+            if len(str_num) == 3:
+                return str_num
+            elif len(str_num) == 2:
+                return "0" + str_num
+            else:
+                return "00" + str_num
+
+    try:
+        req = requests.get(url)
+        send = BeautifulSoup(req.text, "html.parser")
+        table = send.find("table", id="tablesort")
+        all_a = table.find_all("a")
+        song_dict = {}
+        count = 0
+        for i in all_a:
+            count+=1
+            song_dict[get_str_for_num(count) + " " + i.text] = i.get("href")
+        return song_dict
+    except Exception as msg:
+        print(msg)
+        return None
+
 def item_selected(event, tree, queue_on_download):
+    # artist = tree.item(tree.selection(), option="values")[0]
+    # stat_queue = tree.item(tree.selection(), option="values")[1]
+    # link = tree.item(tree.selection(), option="values")[3]
+    artist, stat_queue, _, link = tree.item(tree.selection(), option="values")
 
-
-    artist = tree.item(tree.selection(), option="values")[0]
-    stat_queue = tree.item(tree.selection(), option="values")[1]
-    link = tree.item(tree.selection(), option="values")[3]
-
-    # print("'item_selected' run", event)
-    # print(tree.item(tree.selection(), option="values")[0])
-    # print(tree.selection(), tree.index(tree.selection()))
-    # print(tree.item(tree.selection(), option="values"))
     if stat_queue == "-":
         val = "В очереди"
         queue_on_download[artist] = link
@@ -236,8 +263,9 @@ def main():
         init_GUI(main_url, main_data, queue_on_download)
     finally:
         print("Сохранение данных на диск")
-        for i in queue_on_download.items():
-            print(i)
+        for art, link in queue_on_download.items():
+            for i in get_all_songs_for_artist(link).items():
+                print(i)
 
 if __name__ == "__main__":
     main()
