@@ -135,18 +135,15 @@ def reload_artists(pr_bar, url):
 
 
 def load_data_to_sheets(work_string, frame, main_data):
-    if work_string=="0..9":
-        book = ttk.Notebook(frame)
-        book.enable_traversal()
-        book.pack(expand=True, fill=tk.BOTH)
 
+    def create_sheet_for_literas(book, txt):
         temp_frame = ttk.Frame(book)
         temp_frame.pack(fill=tk.BOTH, expand=True)
-        book.add(temp_frame, text=work_string)
+        book.add(temp_frame, text=txt, )
         tree = ttk.Treeview(temp_frame,
-                               columns=("name", "check", "in_db", "link"),
-                               show="headings",
-                               # image=img
+                            columns=("name", "check", "in_db", "link"),
+                            show="headings",
+                            # image=img
                             )
         tree.heading("name", text="Исполнитель", anchor=tk.W)
         tree.heading("check", text="Добавить", anchor=tk.W)
@@ -156,58 +153,31 @@ def load_data_to_sheets(work_string, frame, main_data):
         tree.column("#2", stretch=tk.NO, width=100)
         tree.column("#3", stretch=tk.NO, width=70)
         tree.column("#4", stretch=tk.NO, width=400)
+
         try:
-            for art in main_data[work_string][1]:
-                tree.insert("", tk.END, values=(art, "-", "--", main_data[work_string][1][art][0]))
+            for art in main_data[txt][1]:
+                tree.insert("", tk.END, values=(art, "-", "--", main_data[txt][1][art][0]))
         except Exception as msg:
             print("Нет данных:", msg)
+
         scroll = ttk.Scrollbar(temp_frame, command=tree.yview)
         tree.configure(yscrollcommand=scroll.set)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
         tree.pack(expand=True, fill=tk.BOTH)
         tree.bind("<<TreeviewSelect>>", lambda event, tree=tree: item_selected(event, tree))
         book.update()
-    else:
-        if len(work_string) > 0:
-            book = ttk.Notebook(frame)
-            book.enable_traversal()
-            book.pack(expand=True, fill=tk.BOTH)
+
+    if len(work_string) > 0:
+        book = ttk.Notebook(frame)
+        book.enable_traversal()
+        book.pack(expand=True, fill=tk.BOTH)
+        if work_string == "0..9":
+            create_sheet_for_literas(book, work_string)
+        else:
             for i in work_string:
-                temp_frame = ttk.Frame(book)
-                temp_frame.pack(fill=tk.BOTH, expand=True)
-                book.add(temp_frame, text=i,)
-                tree = ttk.Treeview(temp_frame,
-                                    columns=("name", "check", "in_db", "link"),
-                                    show="headings",
-                                    # image=img
-                                    )
-                tree.heading("name", text="Исполнитель", anchor=tk.W)
-                tree.heading("check", text="Добавить", anchor=tk.W)
-                tree.heading("in_db", text="В базе", anchor=tk.W)
-                tree.heading("link", text="Ссылка", anchor=tk.W)
-                tree.column("#1", stretch=tk.NO, width=200)
-                tree.column("#2", stretch=tk.NO, width=100)
-                tree.column("#3", stretch=tk.NO, width=70)
-                tree.column("#4", stretch=tk.NO, width=400)
-
-                try:
-                    for art in main_data[i][1]:
-                        """if i == char:
-                            for artist, data_art in data[1].items():
-                                tree.insert("", tk.END, values=(artist,
-                                                                     "-",
-                                                                     in_db_gen(data_art[0]),
-                                                                     data_art[1]))"""
-                        tree.insert("", tk.END, values=(art, "-", "--", main_data[i][1][art][0]))
-                except Exception as msg:
-                    print("Нет данных:", msg)
-
-                scroll = ttk.Scrollbar(temp_frame, command=tree.yview)
-                tree.configure(yscrollcommand=scroll.set)
-                scroll.pack(side=tk.RIGHT, fill=tk.Y)
-                tree.pack(expand=True, fill=tk.BOTH)
-                tree.bind("<<TreeviewSelect>>", lambda event, tree=tree: item_selected(event, tree))
-            book.update()
+                create_sheet_for_literas(book, i)
+    else:
+        print("ОШИБКА! load_data_to_sheets: нет строки на входе")
 
 def init_GUI(main_url, main_data):
     app = tk.Window(themename="superhero")
