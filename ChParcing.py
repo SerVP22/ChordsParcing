@@ -10,7 +10,7 @@ import ttkbootstrap as tk
 from tkinter import ttk
 
 
-def get_dict_liters(url):
+def get_dict_liters_from_main_url(url):
     """
     url: ссылка на главную страницу ресурса AmDm.ru для парсинга
     возвращает словарь {"Символ":"Ссылка", ...} для всех символов на главной странице ресурса
@@ -28,7 +28,7 @@ def get_dict_liters(url):
 
 
 
-def get_artists_on_page(url):
+def get_all_artists_on_page(url):
     """
     url: ссылка на страницу со списком исполнителей
     возвращает словарь {"Исполнитель":"Ссылка", ...} для всех исполнителей на странице
@@ -44,23 +44,25 @@ def get_artists_on_page(url):
     except:
         return None
 
-def item_selected(event, tree):
-    print("'item_selected' run", event)
-    print(tree.item(tree.selection(), option="values")[0])
+def item_selected(event, tree, queue_on_download):
+
+
+    artist = tree.item(tree.selection(), option="values")[0]
+    stat_queue = tree.item(tree.selection(), option="values")[1]
+    link = tree.item(tree.selection(), option="values")[3]
+
+    # print("'item_selected' run", event)
+    # print(tree.item(tree.selection(), option="values")[0])
     # print(tree.selection(), tree.index(tree.selection()))
     # print(tree.item(tree.selection(), option="values"))
-    if tree.item(tree.selection(), option="values")[1] == "-":
-        val = "Добавлено"
+    if stat_queue == "-":
+        val = "В очереди"
+        queue_on_download[artist] = link
     else:
         val = "-"
+        queue_on_download.pop(artist)
     tree.set(tree.selection(), column="#2", value=val)
-
-def in_db_gen(value):
-    if value:
-        return "Загружено"
-    else:
-        return "-"
-
+    print(queue_on_download)
 
 #def get_page_text(url="https://amdm.ru/akkordi/ddt/166093/prosvistela/"):
 #     try:
@@ -103,12 +105,12 @@ def load_artists_from_JSON():
         return None
 def reload_artists(pr_bar, url):
     main_dict = {}
-    dict_liters = get_dict_liters(url) # получаем все литеры с ресурса в виде словаря {А: link, B: ...}
+    dict_liters = get_dict_liters_from_main_url(url) # получаем все литеры с ресурса в виде словаря {А: link, B: ...}
     if dict_liters:
         dict_liters_len = len(dict_liters) # вычисляем количество литер
         count = 0
         for ident, link_lit in dict_liters.items():  # проходимся по словарю символов
-            artist_dict = get_artists_on_page(link_lit)
+            artist_dict = get_all_artists_on_page(link_lit)
             if artist_dict:
                 lit_lib = {}
                 for artist, link_art in artist_dict.items():  # проходимся по списку артистов
@@ -134,7 +136,7 @@ def reload_artists(pr_bar, url):
         print("Невозможно получить данные с ресурса:", url)
 
 
-def load_data_to_sheets(work_string, frame, main_data):
+def load_data_to_sheets(work_string, frame, main_data, queue_on_download):
 
     def create_sheet_for_literas(book, txt):
         temp_frame = ttk.Frame(book)
@@ -164,7 +166,8 @@ def load_data_to_sheets(work_string, frame, main_data):
         tree.configure(yscrollcommand=scroll.set)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
         tree.pack(expand=True, fill=tk.BOTH)
-        tree.bind("<<TreeviewSelect>>", lambda event, tree=tree: item_selected(event, tree))
+        tree.bind("<<TreeviewSelect>>",
+                  lambda event, tree=tree, q=queue_on_download: item_selected(event, tree, q))
         book.update()
 
     if len(work_string) > 0:
@@ -179,7 +182,7 @@ def load_data_to_sheets(work_string, frame, main_data):
     else:
         print("ОШИБКА! load_data_to_sheets: нет строки на входе")
 
-def init_GUI(main_url, main_data):
+def init_GUI(main_url, main_data, queue_on_download):
     app = tk.Window(themename="superhero")
     app.title("Chords Parcing")
     app.geometry("1000x800")
@@ -209,11 +212,11 @@ def init_GUI(main_url, main_data):
     frame2.pack(fill=tk.BOTH, expand=True)
     frame3.pack(fill=tk.BOTH, expand=True)
     main_book.add(frame2, text="    Русские буквы (А..Я)    ")
-    load_data_to_sheets(string_2, frame2, main_data)
+    load_data_to_sheets(string_2, frame2, main_data, queue_on_download)
     main_book.add(frame1, text="    Английские буквы (A..Z)    ")
-    load_data_to_sheets(string_1, frame1, main_data)
+    load_data_to_sheets(string_1, frame1, main_data, queue_on_download)
     main_book.add(frame3, text="    Цифровые символы (0..9)    ")
-    load_data_to_sheets(string_3, frame3, main_data)
+    load_data_to_sheets(string_3, frame3, main_data, queue_on_download)
 
     #     СТРОКА СОСТОЯНИЯ
     status_bar_text = "Загрузка данных из собственной базы данных..."
@@ -226,11 +229,15 @@ def init_GUI(main_url, main_data):
 
 def main():
     main_url = "https://amdm.in"
+    queue_on_download = {}
+
     try:
         main_data = load_artists_from_JSON()
-        init_GUI(main_url, main_data)
+        init_GUI(main_url, main_data, queue_on_download)
     finally:
         print("Сохранение данных на диск")
+        for i in queue_on_download.items():
+            print(i)
 
 if __name__ == "__main__":
     main()
