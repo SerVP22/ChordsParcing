@@ -209,6 +209,26 @@ def load_data_to_sheets(work_string, frame, main_data, queue_on_download):
     else:
         print("ОШИБКА! load_data_to_sheets: нет строки на входе")
 
+def download_songs(queue_on_download, pr_bar):
+    queue_len = len(queue_on_download)
+    if queue_len:
+        count = 0
+        for art, link in queue_on_download.items():
+            for i in get_all_songs_for_artist(link).items():
+                print(i)
+                count += 1
+                v = int(count / queue_len * 100)
+                try:
+                    pr_bar.winfo_exists()
+                except:
+                    ...
+                else:
+                    pr_bar.configure(value=v)
+                    pr_bar.update()
+        queue_on_download.clear()
+    else:
+        print("Очередь загрузки пуста!")
+
 def init_GUI(main_url, main_data, queue_on_download):
     app = tk.Window(themename="superhero")
     app.title("Chords Parcing")
@@ -220,12 +240,16 @@ def init_GUI(main_url, main_data, queue_on_download):
     #    ПАНЕЛЬ ОПЦИЙ
     up_frame = ttk.LabelFrame(app, text="Опции")
     up_frame.pack(fill=tk.BOTH, expand=False)
-    pr_bar1 = ttk.Progressbar(up_frame, length=100)
-    pr_bar1.pack(side="left")
+    pr_bar1 = ttk.Progressbar(up_frame, length=200)
+    pr_bar1.pack(side="left", padx=5)
     btn1 = ttk.Button(up_frame,
                       text="Обновить список артистов",
                       command=lambda: reload_artists(pr_bar=pr_bar1, url=main_url))
-    btn1.pack(side="left")
+    btn1.pack(side="left", padx=5, pady=5)
+    btn2 = ttk.Button(up_frame,
+                      text="Загрузить песни",
+                      command=lambda: download_songs(pr_bar=pr_bar1, queue_on_download=queue_on_download))
+    btn2.pack(side="left", padx=5, pady=5)
 
     #     ПАНЕЛЬ НАВИГАЦИИ
     middle_frame = ttk.LabelFrame(app, text="Исполнители", )
@@ -254,18 +278,19 @@ def init_GUI(main_url, main_data, queue_on_download):
 
     app.mainloop()
 
+    return pr_bar1
+
 def main():
     main_url = "https://amdm.in"
     queue_on_download = {}
+    pr_bar = None
 
     try:
         main_data = load_artists_from_JSON()
-        init_GUI(main_url, main_data, queue_on_download)
+        pr_bar = init_GUI(main_url, main_data, queue_on_download)
     finally:
         print("Сохранение данных на диск")
-        for art, link in queue_on_download.items():
-            for i in get_all_songs_for_artist(link).items():
-                print(i)
+        download_songs(queue_on_download=queue_on_download, pr_bar=pr_bar)
 
 if __name__ == "__main__":
     main()
