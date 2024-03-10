@@ -90,17 +90,18 @@ def item_selected(event, tree, queue_on_download:dict):
     # link = tree.item(tree.selection(), option="values")[3]
     artist, stat_queue, _, link = tree.item(tree.selection(), option="values")
 
-    if stat_queue == "-":
-        val = "В очереди"
-        queue_on_download[artist] = link
-    else:
-        val = "-"
-        if artist in queue_on_download.keys():
-            queue_on_download.pop(artist)
-    tree.set(tree.selection(), column="#2", value=val)
-    print(queue_on_download)
+    if artist != "Нет исполнителей":
+        if stat_queue == "-":
+            val = "В очереди"
+            queue_on_download[artist] = link
+        else:
+            val = "-"
+            if artist in queue_on_download.keys():
+                queue_on_download.pop(artist)
+        tree.set(tree.selection(), column="#2", value=val)
+        print(queue_on_download)
 
-#def get_page_text(url="https://amdm.ru/akkordi/ddt/166093/prosvistela/"):
+# def get_page_text(url):
 #     try:
 #         headers = {'User-Agent':
 #                        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
@@ -141,9 +142,9 @@ def load_artists_from_JSON():
     except FileNotFoundError as msg:
         print("Не могу прочитать файл. ", msg)
         return None
-def reload_artists(pr_bar, url):
+def reload_artists(pr_bar, app, main_url, main_data, queue_on_download):
     main_dict = {}
-    dict_liters = get_dict_liters_from_main_url(url) # получаем все литеры с ресурса в виде словаря {А: link, B: ...}
+    dict_liters = get_dict_liters_from_main_url(main_url) # получаем все литеры с ресурса в виде словаря {А: link, B: ...}
     if dict_liters:
         dict_liters_len = len(dict_liters) # вычисляем количество литер
         count = 0
@@ -168,15 +169,16 @@ def reload_artists(pr_bar, url):
         except Exception as msg:
             print("Не могу записать в файл. ", msg)
 
-
+        app_reload(app=app, main_url=main_url, queue_on_download=queue_on_download)
         print("Файл JSON создан")
+
     else:
-        print("Невозможно получить данные с ресурса:", url)
+        print("Невозможно получить данные с ресурса:", main_url)
 
 
-def load_data_to_sheets(work_string, frame, main_data, queue_on_download):
+def load_data_to_sheets(string_of_characters, frame, main_data, queue_on_download):
 
-    def create_sheet_for_literas(book, txt):
+    def create_sheet_for_characters(book, txt):
         temp_frame = ttk.Frame(book)
         temp_frame.pack(fill=tk.BOTH, expand=True)
         book.add(temp_frame, text=txt, )
@@ -198,6 +200,7 @@ def load_data_to_sheets(work_string, frame, main_data, queue_on_download):
             for art in main_data[txt][1]:
                 tree.insert("", tk.END, values=(art, "-", "--", main_data[txt][1][art][0]))
         except Exception as msg:
+            tree.insert("", tk.END, values=("Нет исполнителей", "", "", ""))
             print("Загрузка локальных данных. Нет данных для:", msg)
 
         scroll = ttk.Scrollbar(temp_frame, command=tree.yview)
@@ -208,42 +211,77 @@ def load_data_to_sheets(work_string, frame, main_data, queue_on_download):
                   lambda event, tree=tree, q=queue_on_download: item_selected(event, tree, q))
         book.update()
 
-    if len(work_string) > 0:
+    if len(string_of_characters) > 0:
         book = ttk.Notebook(frame)
         book.enable_traversal()
         book.pack(expand=True, fill=tk.BOTH)
-        if work_string == "0..9":
-            create_sheet_for_literas(book, work_string)
+        if string_of_characters == "0..9":
+            create_sheet_for_characters(book, string_of_characters)
         else:
-            for i in work_string:
-                create_sheet_for_literas(book, i)
+            for i in string_of_characters:
+                create_sheet_for_characters(book, i)
     else:
         print("ОШИБКА! load_data_to_sheets: нет строки на входе")
 
-def notebook_reload(app):
-    # print(app.winfo_children())
-    # for i in app.children:
-    #     print(i)
-    # app.update()
+def app_reload(app, main_url, queue_on_download):
+    for i in app.pack_slaves():
+        i.destroy()
+    main_data = load_artists_from_JSON()
+    init_widgets(app=app, main_url=main_url, main_data=main_data, queue_on_download=queue_on_download)
+
+def save_song_for_artist(art: str, song_dict: dict, )-> None:
+    dir_name = os.path.join("DataLib", art)
+    if not os.path.isdir(dir_name):
+        os.makedirs(dir_name)                            #создаём папку под исполнителя
+    file_name = art + " - " + str(song_dict[0])
+    # print(file_name)
+    path = os.path.join(dir_name, file_name + ".txt")
+
     try:
-        sys.exit()
-    finally:
-        ...
+        headers = {'User-Agent':
+                       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
+        req = requests.get(song_dict[1], headers=headers)
+    except Exception as msg:
+        print(msg)
+        return
+    send = BeautifulSoup(req.text, "html.parser")
+    # print(temp_dir_list := url.split("/")[-5:-1])  # ["akkordi", "ddt", "166093", "prosvistela"]
+    # print(path := "\\".join(temp_dir_list[:-1]))  # akkordi\ddt\166093\
+    # if not os.path.isdir(path):
+    #     os.makedirs(path)
+    # file_name = os.path.join(path, temp_dir_list[-1]) + ".txt"
+    # print(file_name)
+    with open(path, "w", encoding="cp1251") as f:
+        search = send.find("h1")
+        # print(search.text)
+        f.write(search.text)
+        # print("\n" + "*" * 60 + "\n")
+        f.writelines("\n\n")
+        f.write("*" * 60)
+        f.writelines("\n\n")
+        search = send.find_all("pre")
+        for i in search:
+            # print(i.text)
+            f.write(i.text)
+            # print("\n" + "*" * 60 + "\n")
+            f.writelines("\n\n")
+            f.write("*" * 60)
+            f.writelines("\n\n")
 
-    # os.system('ChParcing.py')
-    #     main()
 
-# def save_songs_to_drive(art, )
 
-def download_songs(param, queue_on_download, pr_bar, app):
+
+def download_songs(main_url, queue_on_download, pr_bar, app):
     queue_len = len(queue_on_download)
     if queue_len:
-        pr_bar.configure(value=0)
         count = 0
-        for art, link in queue_on_download.items():
-            for i in get_all_songs_for_artist(link).items():
-                print(i)
-                # Запись на диск
+        for art, link in queue_on_download.items():         # ПРОХОДИМ ПО ИСПОЛНИТЕЛЯМ
+            songs_dict = get_all_songs_for_artist(link)
+            if songs_dict:
+                for item in songs_dict.items():                # ПРОХОДИМ ПО ПЕСНЯМ
+                    # print(i)
+                    # Запись на диск
+                    save_song_for_artist(art=art, song_dict=item)
 
 
 
@@ -258,18 +296,19 @@ def download_songs(param, queue_on_download, pr_bar, app):
                 pr_bar.configure(value=v)
                 pr_bar.update()
         queue_on_download.clear()
-        # notebook_reload(app)
 
-        for i in app.pack_slaves():
-            print(i, " is kill")
-            i.destroy()
-
-        init_widgets(app, param[0], param[1], queue_on_download)
+        # Обновляем окно
+        try:
+            app.winfo_exists()
+        except:
+            ...
+        else:
+            app_reload(app=app, main_url=main_url, queue_on_download=queue_on_download)
 
     else:
         print("Очередь загрузки пуста!")
 
-def init_widgets(app, main_url, main_data, queue_on_download):
+def init_widgets(app, main_url, main_data, queue_on_download)-> ttk.Progressbar:
     string_1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     string_2 = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
     string_3 = "0..9"
@@ -281,14 +320,30 @@ def init_widgets(app, main_url, main_data, queue_on_download):
     pr_bar1.pack(side="left", padx=5)
     btn1 = ttk.Button(up_frame,
                       text="Обновить список артистов",
-                      command=lambda: reload_artists(pr_bar=pr_bar1, url=main_url))
+                      command=lambda: reload_artists(pr_bar=pr_bar1,
+                                                     app=app,
+                                                     main_url=main_url,
+                                                     main_data=main_data,
+                                                     queue_on_download=queue_on_download))
     btn1.pack(side="left", padx=5, pady=5)
 
-    param = [main_url, main_data]
     btn2 = ttk.Button(up_frame,
                       text="Загрузить песни",
-                      command=lambda: download_songs(param=param, app=app, pr_bar=pr_bar1, queue_on_download=queue_on_download))
+                      command=lambda: download_songs(main_url=main_url,
+                                                     app=app,
+                                                     pr_bar=pr_bar1,
+                                                     queue_on_download=queue_on_download)
+                      )
     btn2.pack(side="left", padx=5, pady=5)
+
+    # btn3 = ttk.Button(up_frame,
+    #                   text="**Обновить окно**",
+    #                   command=lambda: app_reload(app=app,
+    #                                              main_url=main_url,
+    #                                              main_data=main_data,
+    #                                              queue_on_download=queue_on_download)
+    #                   )
+    # btn3.pack(side="left", padx=5, pady=5)
 
     #     ПАНЕЛЬ НАВИГАЦИИ
     middle_frame = ttk.LabelFrame(app, text="Исполнители", )
@@ -314,7 +369,7 @@ def init_widgets(app, main_url, main_data, queue_on_download):
     status_bar_label = ttk.Label(status_bar, text=status_bar_text, borderwidth=10)
     status_bar.pack(fill=tk.BOTH, expand=False)
     status_bar_label.pack(side="left")
-
+    return pr_bar1
 
 def init_GUI(main_url, main_data, queue_on_download):
     app = tk.Window(themename="superhero")
@@ -331,7 +386,7 @@ def init_GUI(main_url, main_data, queue_on_download):
     return pr_bar
 
 def main():
-    main_url = "https://amdm.j18.ru"
+    main_url = "https://amdm.j118.ru"
     queue_on_download = {}
     pr_bar = None
     app = None
@@ -339,9 +394,12 @@ def main():
     try:
         main_data = load_artists_from_JSON()
         pr_bar = init_GUI(main_url, main_data, queue_on_download)
+    except Exception as msg:
+        print("ERROR!", msg)
     finally:
-        print("Сохранение данных на диск")
-        download_songs(queue_on_download=queue_on_download, pr_bar=pr_bar, app=app)
+        if queue_on_download:
+            print("Сохранение данных на диск")
+            download_songs(main_url=main_url, queue_on_download=queue_on_download, pr_bar=pr_bar, app=app)
 
 if __name__ == "__main__":
     main()
