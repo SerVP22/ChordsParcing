@@ -157,6 +157,7 @@ def load_data_to_sheets(string_of_characters, frame, main_data, queue_on_downloa
         book.add(temp_frame, text=txt, )
         tree = ttk.Treeview(temp_frame,
                             columns=("name", "check", "in_db", "link", "parent"),
+                            displaycolumns=("name", "check", "in_db", "link"),
                             show="headings",
                             # image=img
                             )
