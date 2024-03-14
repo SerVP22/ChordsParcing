@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import requests
 import os
 import ttkbootstrap as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox as mes_box
 
 
 def get_dict_liters_from_main_url(url):
@@ -50,7 +50,7 @@ def get_all_artists_on_page(url):
         return None
 
 
-def get_all_songs_for_artist(url) -> dict:
+def get_all_songs_for_artist(url) -> dict | None:
     """
     url: ссылка на страницу исполнителя
     возвращает словарь {"Песня":"Ссылка", ...} для всех песен
@@ -85,22 +85,19 @@ def get_all_songs_for_artist(url) -> dict:
         return None
 
 
-def item_selected(event, tree, queue_on_download: dict):
-    # artist = tree.item(tree.selection(), option="values")[0]
-    # stat_queue = tree.item(tree.selection(), option="values")[1]
-    # link = tree.item(tree.selection(), option="values")[3]
+def item_selected(event, tree, app):
     artist, stat_queue, _, link, parent = tree.item(tree.selection(), option="values")
 
     if artist != "Нет исполнителей":
         if stat_queue == "-":
             val = "В очереди"
-            queue_on_download[artist] = (link, parent)
+            app.queue_on_download[artist] = (link, parent)
         else:
             val = "-"
-            if artist in queue_on_download.keys():
-                queue_on_download.pop(artist)
+            if artist in app.queue_on_download.keys():
+                app.queue_on_download.pop(artist)
         tree.set(tree.selection(), column="#2", value=val)
-        print(queue_on_download)
+        print(app.queue_on_download)
 
 
 def load_artists_from_json():
@@ -114,9 +111,10 @@ def load_artists_from_json():
         return None
 
 
-def reload_artists(app, main_url, queue_on_download):
+def reload_artists(app):
     main_dict = {}
-    dict_liters = get_dict_liters_from_main_url(main_url)  # получаем все литеры с ресурса в виде словаря {А: link, B: ...}
+    dict_liters = get_dict_liters_from_main_url(app.my_main_url)  # получаем все литеры с ресурса
+                                                                  # в виде словаря {А: link, B: ...}
     if dict_liters:
         dict_liters_len = len(dict_liters)  # вычисляем количество литер
         count = 0
@@ -142,14 +140,14 @@ def reload_artists(app, main_url, queue_on_download):
         except Exception as msg:
             print("Не могу записать в файл. ", msg)
 
-        app_reload(app=app, main_url=main_url, queue_on_download=queue_on_download)
+        app_reload(app)
         print("Файл JSON создан")
 
     else:
-        print("Невозможно получить данные с ресурса:", main_url)
+        print("Невозможно получить данные с ресурса:", app.my_main_url)
 
 
-def load_data_to_sheets(string_of_characters, frame, main_data, queue_on_download):
+def load_data_to_sheets(string_of_characters, frame, app):
 
     def create_sheet_for_characters(book, txt):
         temp_frame = ttk.Frame(book)
@@ -172,12 +170,12 @@ def load_data_to_sheets(string_of_characters, frame, main_data, queue_on_downloa
         tree.column("#4", stretch=tk.NO, width=400)
 
         try:
-            for art in main_data[txt][1]:
+            for art in app.my_main_data[txt][1]:
                 tree.insert("", tk.END, values=(art,
                                                 "-",
                                                 "--",
-                                                main_data[txt][1][art][0], # ссылка
-                                                main_data[txt][1][art][1]  # родитель
+                                                app.my_main_data[txt][1][art][0], # ссылка
+                                                app.my_main_data[txt][1][art][1]  # родитель
                                                 )
                             )
         except Exception as msg:
@@ -188,8 +186,7 @@ def load_data_to_sheets(string_of_characters, frame, main_data, queue_on_downloa
         tree.configure(yscrollcommand=scroll.set)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
         tree.pack(expand=True, fill=tk.BOTH)
-        tree.bind("<<TreeviewSelect>>",
-                  lambda event, tree=tree, q=queue_on_download: item_selected(event, tree, q))
+        tree.bind("<<TreeviewSelect>>", lambda event: item_selected(event, tree, app))
         book.update()
 
     if len(string_of_characters) > 0:
@@ -205,12 +202,12 @@ def load_data_to_sheets(string_of_characters, frame, main_data, queue_on_downloa
         print("ОШИБКА! load_data_to_sheets: нет строки на входе")
 
 
-def app_reload(app, main_url, queue_on_download):
+def app_reload(app):
     if app:
         for i in app.pack_slaves():
             i.destroy()
-        main_data = load_artists_from_json()
-        init_widgets(app=app, main_url=main_url, main_data=main_data, queue_on_download=queue_on_download)
+        app.my_main_data = load_artists_from_json()
+        init_widgets(app)
 
 
 def clear_file_name(file_name: str) -> str:
@@ -262,11 +259,11 @@ def save_song_on_disc(app, art: str, song_dict: tuple, parent: str) -> None:
     time.sleep(2)
 
 
-def download_songs(main_url, queue_on_download, app):
-    queue_len = len(queue_on_download)
+def download_songs(app):
+    queue_len = len(app.queue_on_download)
     if queue_len:
         count = 0
-        for art, art_list in queue_on_download.items():         # ПРОХОДИМ ПО ИСПОЛНИТЕЛЯМ
+        for art, art_list in app.queue_on_download.items():         # ПРОХОДИМ ПО ИСПОЛНИТЕЛЯМ
             songs_dict = get_all_songs_for_artist(art_list[0])
             if songs_dict:
                 for item in songs_dict.items():                # ПРОХОДИМ ПО ПЕСНЯМ
@@ -277,15 +274,15 @@ def download_songs(main_url, queue_on_download, app):
             if app:
                 app.my_pr_bar.configure(value=v)
                 app.my_pr_bar.update()
-        queue_on_download.clear()
+        app.queue_on_download.clear()
         # Обновляем окно
-        if app:
-            app_reload(app=app, main_url=main_url, queue_on_download=queue_on_download)
+        if not app.destroy_flag:
+            app_reload(app)
     else:
         print("Очередь загрузки пуста!")
 
 
-def init_widgets(app, main_url, main_data, queue_on_download):
+def init_widgets(app):
     string_1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     string_2 = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
     string_3 = "0..9"
@@ -296,16 +293,13 @@ def init_widgets(app, main_url, main_data, queue_on_download):
 
     btn1 = ttk.Button(up_frame,
                       text="Обновить список артистов",
-                      command=lambda: reload_artists(app=app,
-                                                     main_url=main_url,
-                                                     queue_on_download=queue_on_download))
+                      command=lambda: reload_artists(app)
+                      )
     btn1.pack(side="left", padx=5, pady=5)
 
     btn2 = ttk.Button(up_frame,
                       text="Загрузить песни",
-                      command=lambda: download_songs(main_url=main_url,
-                                                     app=app,
-                                                     queue_on_download=queue_on_download)
+                      command=lambda: download_songs(app)
                       )
     btn2.pack(side="left", padx=5, pady=5)
 
@@ -330,45 +324,56 @@ def init_widgets(app, main_url, main_data, queue_on_download):
     frame2.pack(fill=tk.BOTH, expand=True)
     frame3.pack(fill=tk.BOTH, expand=True)
     main_book.add(frame2, text="    Русские буквы (А..Я)    ")
-    load_data_to_sheets(string_2, frame2, main_data, queue_on_download)
+    load_data_to_sheets(string_2, frame2, app)
     main_book.add(frame1, text="    Английские буквы (A..Z)    ")
-    load_data_to_sheets(string_1, frame1, main_data, queue_on_download)
+    load_data_to_sheets(string_1, frame1, app)
     main_book.add(frame3, text="    Цифровые символы (0..9)    ")
-    load_data_to_sheets(string_3, frame3, main_data, queue_on_download)
+    load_data_to_sheets(string_3, frame3, app)
 
     #     СТРОКА СОСТОЯНИЯ
     status_bar_text = "[Выберите исполнителей для скачивания и нажмите кнопку \"Загрузить песни\"]"
     status_bar = ttk.Frame(app)
     app.my_st_bar = ttk.Label(status_bar, text=status_bar_text, borderwidth=10, foreground="yellow")
-    status_bar.pack(fill=tk.BOTH, expand=False)
+    status_bar.pack(fill=tk.BOTH, expand=False, padx=10)
     app.my_st_bar.pack(side="left")
     app.my_pr_bar = ttk.Progressbar(status_bar, bootstyle="success-striped", length=200)
     app.my_pr_bar.pack(side="right", padx=5)
 
 
-def init_gui(main_url, main_data, queue_on_download):
+def destroy_app(app):
+    res = mes_box.askyesnocancel("Загрузить очередь скачивания?",
+                                 """Окно приложения закроется. \nСкачать выбранных исполнителей в фоновом режиме?""")
+    # print(res)
+    if res is True:
+        # print("Пользователь просит скачать!")
+        if app.queue_on_download:
+            print("Сохранение данных на диск")
+            app.destroy_flag = True
+            download_songs(app)
+        app.destroy()
+    elif res is False:
+        app.destroy()
+
+def init_gui(main_url, main_data):
     app = tk.Window(themename="superhero")
+    app.my_main_url = main_url
+    app.my_main_data = main_data
+    app.destroy_flag = False
+    app.queue_on_download = {}
+
     app.title("Chords Parcing")
     app.geometry("1000x800")
+    app.protocol("WM_DELETE_WINDOW", lambda: destroy_app(app))
 
-    init_widgets(app, main_url, main_data, queue_on_download)
+    init_widgets(app)
 
     app.mainloop()
 
 
 def main():
     main_url = "https://amdm.j118.ru"
-    queue_on_download = {}
-
-    try:
-        main_data = load_artists_from_json()
-        init_gui(main_url, main_data, queue_on_download)
-    except Exception as msg:
-        print("ERROR!", msg)
-    finally:
-        if queue_on_download:
-            print("Сохранение данных на диск")
-            download_songs(main_url=main_url, queue_on_download=queue_on_download, app=None)
+    main_data = load_artists_from_json()
+    init_gui(main_url, main_data)
 
 
 if __name__ == "__main__":
