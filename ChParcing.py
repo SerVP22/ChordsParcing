@@ -119,7 +119,7 @@ def reload_artists(app):
         dict_liters_len = len(dict_liters)  # вычисляем количество литер
         count = 0
         for ident, link_lit in dict_liters.items():  # проходимся по словарю символов
-            artist_dict = get_all_artists_on_page(link_lit)
+            artist_dict = get_all_artists_on_page(link_lit)  # получаем список исполнителей для каждой литеры
             if artist_dict:
                 lit_lib = {}
                 for artist, link_art in artist_dict.items():  # проходимся по списку артистов
@@ -133,6 +133,7 @@ def reload_artists(app):
                 app.my_pr_bar.configure(value=v)
                 app.my_pr_bar.update()
                 app.my_st_bar.configure(text=f'[ОБНОВЛЕНИЕ СПИСКА ИСПОЛНИТЕЛЕЙ] Обновление "{ident}\"')
+                app.my_st_bar.update()
                 # time.sleep(0.5)
         try:
             with open("main_data.json", "w") as f:
@@ -142,6 +143,7 @@ def reload_artists(app):
 
         app_reload(app)
         print("Файл JSON создан")
+        mes_box.showinfo("Информация", "Обновление списка исполнителей завершено")
 
     else:
         print("Невозможно получить данные с ресурса:", app.my_main_url)
@@ -216,7 +218,7 @@ def clear_file_name(file_name: str) -> str:
     :param file_name: str
     :return: str
     """
-    bad_ch = """:'";"""
+    bad_ch = """:";"""
     new_str = ""
     for ch in file_name:
         if ch not in bad_ch:
@@ -230,8 +232,8 @@ def save_song_on_disc(app, art: str, song_dict: tuple, parent: str) -> None:
     if not os.path.isdir(dir_name):
         os.makedirs(dir_name)                            # создаём папку под исполнителя
     file_name = art + " - " + str(song_dict[0])
-    if app:
-        app.my_st_bar.configure(text=f"[ЗАГРУЗКА] {file_name}")
+    app.my_st_bar.configure(text=f"[ЗАГРУЗКА] {file_name}")
+    app.my_st_bar.update()
 
     path = clear_file_name(os.path.join(dir_name, file_name + ".txt"))
 
@@ -256,28 +258,30 @@ def save_song_on_disc(app, art: str, song_dict: tuple, parent: str) -> None:
             f.write("*" * 60)
             f.writelines("\n\n")
 
-    time.sleep(2)
-
 
 def download_songs(app):
     queue_len = len(app.queue_on_download)
     if queue_len:
+        if queue_len == 1: #  если в очереди только 1 элемент, значение ProgressBar устанавливаем в 50%
+            app.my_pr_bar.configure(value=50)
+            app.my_pr_bar.update()
         count = 0
         for art, art_list in app.queue_on_download.items():         # ПРОХОДИМ ПО ИСПОЛНИТЕЛЯМ
             songs_dict = get_all_songs_for_artist(art_list[0])
             if songs_dict:
                 for item in songs_dict.items():                # ПРОХОДИМ ПО ПЕСНЯМ
                     save_song_on_disc(app=app, art=art, song_dict=item, parent=art_list[1])
+                    time.sleep(app.my_delay)
             # Обновление значения ProgressBar
             count += 1
             v = int(count / queue_len * 100)
-            if app:
-                app.my_pr_bar.configure(value=v)
-                app.my_pr_bar.update()
+            app.my_pr_bar.configure(value=v)
+            app.my_pr_bar.update()
         app.queue_on_download.clear()
-        # Обновляем окно
+        # Обновляем окно, если пользователь не закрывает приложение
         if not app.destroy_flag:
             app_reload(app)
+        mes_box.showinfo("Информация", "Загрузка песен завершена")
     else:
         print("Очередь загрузки пуста!")
 
@@ -341,17 +345,16 @@ def init_widgets(app):
 
 
 def destroy_app(app):
-    res = mes_box.askyesnocancel("Загрузить очередь скачивания?",
-                                 """Окно приложения закроется. \nСкачать выбранных исполнителей в фоновом режиме?""")
-    # print(res)
-    if res is True:
-        # print("Пользователь просит скачать!")
-        if app.queue_on_download:
-            print("Сохранение данных на диск")
+    if app.queue_on_download:  # Срабатывает, если в очереди есть хотя бы один исполнитель
+        res = mes_box.askyesnocancel("Загрузить очередь скачивания?",
+                                     """Окно приложения закроется. \nСкачать выбранных исполнителей?""")
+        if res is True:  # Пользователь нажал "Да"
             app.destroy_flag = True
             download_songs(app)
-        app.destroy()
-    elif res is False:
+            app.destroy()
+        elif res is False:  # Пользователь нажал "Нет"
+            app.destroy()
+    else:
         app.destroy()
 
 def init_gui(main_url, main_data):
@@ -359,6 +362,7 @@ def init_gui(main_url, main_data):
     app.my_main_url = main_url
     app.my_main_data = main_data
     app.destroy_flag = False
+    app.my_delay = 1  # Задержка при цикличном обращении к сайту
     app.queue_on_download = {}
 
     app.title("Chords Parcing")
