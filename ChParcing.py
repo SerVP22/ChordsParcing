@@ -1,11 +1,14 @@
+# python 3.10
+
 import json
 import time
 
 from bs4 import BeautifulSoup
 import requests
 import os
-import ttkbootstrap as tk
-from tkinter import ttk, messagebox as mes_box
+import ttkbootstrap as ttk
+from ttkbootstrap import Checkbutton
+from tkinter import messagebox as mes_box
 
 
 def get_dict_liters_from_main_url(url):
@@ -86,10 +89,8 @@ def get_all_songs_for_artist(url) -> dict | None:
 
 
 def item_selected(event, tree, app):
-    artist, stat_queue, _, link, parent = tree.item(tree.selection(), option="values")
 
-    if artist != "Нет исполнителей" and artist not in app.saved_data:
-    # Ветка отрабатывается если исполнитель ещё не загружен и в выборе есть исполнитель
+    def invert_item_state():
         if stat_queue == "-":
             val = "В очереди"
             app.queue_on_download[artist] = (link, parent)
@@ -99,6 +100,17 @@ def item_selected(event, tree, app):
                 app.queue_on_download.pop(artist)
         tree.set(tree.selection(), column="#2", value=val)
         print(app.queue_on_download)
+
+    # Получаем значения из таблицы
+    artist, stat_queue, _, link, parent = tree.item(tree.selection(), option="values")
+
+    if artist != "Нет исполнителей":
+        if app.resave_data.get() == 0:          # Если отключена опция "Перезапись данных",
+            if artist not in app.saved_data:    # то проверяем наличие исполнителя в списке загруженных
+                invert_item_state()
+        elif app.resave_data.get() == 1:
+            invert_item_state()
+
 
 
 def load_artists_from_json():
@@ -154,27 +166,28 @@ def load_data_to_sheets(string_of_characters, frame, app):
 
     def create_sheet_for_characters(book, txt):
         temp_frame = ttk.Frame(book)
-        temp_frame.pack(fill=tk.BOTH, expand=True)
+        temp_frame.pack(fill=ttk.BOTH, expand=True)
         book.add(temp_frame, text=txt, )
         tree = ttk.Treeview(temp_frame,
                             columns=("name", "check", "in_db", "link", "parent"),
                             displaycolumns=("name", "check", "in_db", "link"),
                             show="headings",
+                            selectmode=ttk.BROWSE
                             # image=img
                             )
-        tree.heading("name", text="Исполнитель", anchor=tk.W)
-        tree.heading("check", text="Добавить", anchor=tk.W)
-        tree.heading("in_db", text="В базе", anchor=tk.W)
-        tree.heading("link", text="Ссылка", anchor=tk.W)
-        tree.heading("parent", text="Родитель", anchor=tk.W)
-        tree.column("#1", stretch=tk.NO, width=200)
-        tree.column("#2", stretch=tk.NO, width=100)
-        tree.column("#3", stretch=tk.NO, width=70)
-        tree.column("#4", stretch=tk.NO, width=400)
+        tree.heading("name", text="Исполнитель", anchor=ttk.W)
+        tree.heading("check", text="Добавить", anchor=ttk.W)
+        tree.heading("in_db", text="В базе", anchor=ttk.W)
+        tree.heading("link", text="Ссылка", anchor=ttk.W)
+        tree.heading("parent", text="Родитель", anchor=ttk.W)
+        tree.column("#1", stretch=ttk.NO, width=200)
+        tree.column("#2", stretch=ttk.NO, width=100)
+        tree.column("#3", stretch=ttk.NO, width=70)
+        tree.column("#4", stretch=ttk.NO, width=400)
 
         try:
             for art in app.my_main_data[txt][1]:
-                tree.insert("", tk.END, values=(art,
+                tree.insert("", ttk.END, values=(art,
                                                 "-",
                                                 "Загружен" if art in app.saved_data else "--",
                                                 app.my_main_data[txt][1][art][0], # ссылка
@@ -182,20 +195,20 @@ def load_data_to_sheets(string_of_characters, frame, app):
                                                 )
                             )
         except Exception as msg:
-            tree.insert("", tk.END, values=("Нет исполнителей", "", "", "", ""))
+            tree.insert("", ttk.END, values=("Нет исполнителей", "", "", "", ""))
             print("Загрузка локальных данных. Нет данных для:", msg)
 
         scroll = ttk.Scrollbar(temp_frame, command=tree.yview)
         tree.configure(yscrollcommand=scroll.set)
-        scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        tree.pack(expand=True, fill=tk.BOTH)
+        scroll.pack(side=ttk.RIGHT, fill=ttk.Y)
+        tree.pack(expand=True, fill=ttk.BOTH)
         tree.bind("<<TreeviewSelect>>", lambda event: item_selected(event, tree, app))
         book.update()
 
     if len(string_of_characters) > 0:
         book = ttk.Notebook(frame)
         book.enable_traversal()
-        book.pack(expand=True, fill=tk.BOTH)
+        book.pack(expand=True, fill=ttk.BOTH)
         if string_of_characters == "0..9":
             create_sheet_for_characters(book, string_of_characters)
         else:
@@ -306,6 +319,10 @@ def download_songs(app):
         print("Очередь загрузки пуста!")
 
 
+def invert_resave_data(app):
+    app.resave_data = not app.resave_data
+
+
 def init_widgets(app):
     string_1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     string_2 = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
@@ -313,7 +330,7 @@ def init_widgets(app):
 
     #    ПАНЕЛЬ ОПЦИЙ
     up_frame = ttk.LabelFrame(app, text="Опции")
-    up_frame.pack(fill=tk.BOTH, expand=False)
+    up_frame.pack(fill=ttk.BOTH, expand=False)
 
     btn1 = ttk.Button(up_frame,
                       text="Обновить список артистов",
@@ -327,26 +344,33 @@ def init_widgets(app):
                       )
     btn2.pack(side="left", padx=5, pady=5)
 
-    # btn3 = ttk.Button(up_frame,
-    #                   text="**Обновить окно**",
-    #                   command=lambda: app_reload(app=app,
-    #                                              main_url=main_url,
-    #                                              main_data=main_data,
-    #                                              queue_on_download=queue_on_download)
-    #                   )
-    # btn3.pack(side="left", padx=5, pady=5)
+    btn3 = ttk.Button(up_frame,
+                      text="Настройки",
+
+                      )
+    btn3.pack(side="left", padx=5, pady=5)
+
+    ch_but = Checkbutton(up_frame,
+                         text="Перезапись данных",
+                         variable=app.resave_data,
+                         # command=lambda: invert_resave_data(app)
+                         offvalue=0,
+                         onvalue=1
+                         )
+    # ch_but.deselect()
+    ch_but.pack(side="left", padx=5, pady=5)
 
     #     ПАНЕЛЬ НАВИГАЦИИ
     middle_frame = ttk.LabelFrame(app, text="Исполнители", )
-    middle_frame.pack(fill=tk.BOTH, expand=True)
+    middle_frame.pack(fill=ttk.BOTH, expand=True)
     main_book = ttk.Notebook(middle_frame, padding=5)
-    main_book.pack(expand=True, fill=tk.BOTH)
+    main_book.pack(expand=True, fill=ttk.BOTH)
     frame1 = ttk.Frame(main_book)
     frame2 = ttk.Frame(main_book)
     frame3 = ttk.Frame(main_book)
-    frame1.pack(fill=tk.BOTH, expand=True)
-    frame2.pack(fill=tk.BOTH, expand=True)
-    frame3.pack(fill=tk.BOTH, expand=True)
+    frame1.pack(fill=ttk.BOTH, expand=True)
+    frame2.pack(fill=ttk.BOTH, expand=True)
+    frame3.pack(fill=ttk.BOTH, expand=True)
     main_book.add(frame2, text="    Русские буквы (А..Я)    ")
     load_data_to_sheets(string_2, frame2, app)
     main_book.add(frame1, text="    Английские буквы (A..Z)    ")
@@ -358,7 +382,7 @@ def init_widgets(app):
     status_bar_text = "[Выберите исполнителей для скачивания и нажмите кнопку \"Загрузить песни\"]"
     status_bar = ttk.Frame(app)
     app.my_st_bar = ttk.Label(status_bar, text=status_bar_text, borderwidth=10, foreground="yellow")
-    status_bar.pack(fill=tk.BOTH, expand=False, padx=10)
+    status_bar.pack(fill=ttk.BOTH, expand=False, padx=10)
     app.my_st_bar.pack(side="left")
     app.my_pr_bar = ttk.Progressbar(status_bar, bootstyle="success-striped", length=200)
     app.my_pr_bar.pack(side="right", padx=5)
@@ -378,10 +402,11 @@ def destroy_app(app):
         app.destroy()
 
 def init_gui(main_url, main_data):
-    app = tk.Window(themename="superhero")
+    app = ttk.Window(themename="superhero")
     app.my_main_url = main_url
     app.my_main_data = main_data
     app.destroy_flag = False
+    app.resave_data = ttk.IntVar(value=0)
     app.my_delay = 1  # Задержка при цикличном обращении к сайту
     app.queue_on_download = {}
     try:
