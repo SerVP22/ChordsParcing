@@ -88,7 +88,8 @@ def get_all_songs_for_artist(url) -> dict | None:
 def item_selected(event, tree, app):
     artist, stat_queue, _, link, parent = tree.item(tree.selection(), option="values")
 
-    if artist != "Нет исполнителей":
+    if artist != "Нет исполнителей" and artist not in app.saved_data:
+    # Ветка отрабатывается если исполнитель ещё не загружен и в выборе есть исполнитель
         if stat_queue == "-":
             val = "В очереди"
             app.queue_on_download[artist] = (link, parent)
@@ -175,13 +176,13 @@ def load_data_to_sheets(string_of_characters, frame, app):
             for art in app.my_main_data[txt][1]:
                 tree.insert("", tk.END, values=(art,
                                                 "-",
-                                                "--",
+                                                "Загружен" if art in app.saved_data else "--",
                                                 app.my_main_data[txt][1][art][0], # ссылка
                                                 app.my_main_data[txt][1][art][1]  # родитель
                                                 )
                             )
         except Exception as msg:
-            tree.insert("", tk.END, values=("Нет исполнителей", "", "", ""))
+            tree.insert("", tk.END, values=("Нет исполнителей", "", "", "", ""))
             print("Загрузка локальных данных. Нет данных для:", msg)
 
         scroll = ttk.Scrollbar(temp_frame, command=tree.yview)
@@ -218,7 +219,7 @@ def clear_file_name(file_name: str) -> str:
     :param file_name: str
     :return: str
     """
-    bad_ch = """:";"""
+    bad_ch = """:"><*?|"""
     new_str = ""
     for ch in file_name:
         if ch not in bad_ch:
@@ -228,7 +229,7 @@ def clear_file_name(file_name: str) -> str:
 
 def save_song_on_disc(app, art: str, song_dict: tuple, parent: str) -> None:
     print(song_dict)
-    dir_name = os.path.join("DataLib", parent, art)
+    dir_name = clear_file_name(os.path.join("DataLib", parent, art))
     if not os.path.isdir(dir_name):
         os.makedirs(dir_name)                            # создаём папку под исполнителя
     file_name = art + " - " + str(song_dict[0])
@@ -259,6 +260,22 @@ def save_song_on_disc(app, art: str, song_dict: tuple, parent: str) -> None:
             f.writelines("\n\n")
 
 
+def load_saved_data_from_json():
+    try:
+        with open("saved_data.json", "r") as f:
+            return json.load(f)
+    except FileNotFoundError as msg:
+        print("Не могу прочитать файл saved_data.json", msg)
+        return None
+
+
+def update_saved_data_file(app):
+    try:
+        with open("saved_data.json", "w") as f:
+            json.dump(list(app.saved_data), f)
+    except Exception as msg:
+        print("Не могу записать в файл saved_data.json", msg)
+
 def download_songs(app):
     queue_len = len(app.queue_on_download)
     if queue_len:
@@ -277,6 +294,9 @@ def download_songs(app):
             v = int(count / queue_len * 100)
             app.my_pr_bar.configure(value=v)
             app.my_pr_bar.update()
+
+        app.saved_data.update(set(app.queue_on_download.keys()))  # Добавляем в множество сохранённых исполнителей
+        update_saved_data_file(app)
         app.queue_on_download.clear()
         # Обновляем окно, если пользователь не закрывает приложение
         if not app.destroy_flag:
@@ -364,6 +384,11 @@ def init_gui(main_url, main_data):
     app.destroy_flag = False
     app.my_delay = 1  # Задержка при цикличном обращении к сайту
     app.queue_on_download = {}
+    try:
+        app.saved_data = set(load_saved_data_from_json())
+    except:
+        app.saved_data = set()
+
 
     app.title("Chords Parcing")
     app.geometry("1000x800")
