@@ -106,10 +106,10 @@ def item_selected(event, tree, app):
     artist, stat_queue, _, link, parent = tree.item(tree.selection(), option="values")
 
     if artist != "Нет исполнителей":
-        if app.resave_data.get() == 0:          # Если отключена опция "Перезапись данных",
+        if app.resave_data_option.get() == 0:          # Если отключена опция "Перезапись данных",
             if artist not in app.saved_data:    # то проверяем наличие исполнителя в списке загруженных
                 invert_item_state()
-        elif app.resave_data.get() == 1:
+        elif app.resave_data_option.get() == 1:
             invert_item_state()
 
 
@@ -356,7 +356,7 @@ def download_all_data(app):
     app.queue_on_download.clear()
 
 def invert_resave_data(app):
-    app.resave_data = not app.resave_data
+    app.resave_data_option = not app.resave_data_option
 
 
 def init_widgets(app):
@@ -400,7 +400,7 @@ def init_widgets(app):
 
     ch_but = ttk_bs.Checkbutton(up_frame,
                                 text="Перезапись исполнителей",
-                                variable=app.resave_data,
+                                variable=app.resave_data_option,
                                 offvalue=0,
                                 onvalue=1
                                 )
@@ -480,7 +480,7 @@ def init_gui(main_url, main_data):
     app.my_main_url = main_url
     app.my_main_data = main_data
     app.destroy_flag = False
-    app.resave_data = ttk_bs.IntVar(value=0)
+    app.resave_data_option = ttk_bs.IntVar(value=0)
     app.my_delay = 0  # Задержка при цикличном обращении к сайту
     app.queue_on_download = {}
     try:
