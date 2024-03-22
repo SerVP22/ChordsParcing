@@ -211,7 +211,7 @@ def load_data_to_sheets(string_of_characters, frame, app):
         book.update()
 
     if len(string_of_characters) > 0:
-        book = ttk_bs.Notebook(frame)
+        book = ttk_bs.Notebook(frame, bootstyle="dark")
         book.enable_traversal()
         book.pack(expand=True, fill=ttk_bs.BOTH)
         if string_of_characters == "0..9":
@@ -248,7 +248,7 @@ def clear_file_name(file_name: str) -> str:
     return new_str
 
 
-def save_song_on_disc(app, art: str, song_dict: tuple, parent: str, dir: str) -> None:
+def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) -> None:
     print(song_dict)
     artist = clear_file_name(art.strip())
     dir_name = os.path.join(dir, parent, artist)
@@ -265,7 +265,7 @@ def save_song_on_disc(app, art: str, song_dict: tuple, parent: str, dir: str) ->
                     AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
         req = requests.get(song_dict[1], headers=headers)
     except Exception as msg:
-        print(msg)
+        print("Ошибка запроса:", msg)
         return
     send = BeautifulSoup(req.text, "html.parser")
     with open(path, "w", encoding="utf-8") as f:
@@ -291,6 +291,15 @@ def load_saved_data_from_json():
         return None
 
 
+def load_settings_from_json():
+    try:
+        with open("setting.json", "r") as f:
+            data = json.load(f)
+            return data["delay"], data["main_url"]
+    except FileNotFoundError as msg:
+        print("Не могу прочитать файл setting.json", msg)
+        return None
+
 def update_saved_data_file(app):
     try:
         with open("saved_data.json", "w") as f:
@@ -309,7 +318,7 @@ def download_songs(app, dir):
             songs_dict = get_all_songs_for_artist(art_list[0])
             if songs_dict:
                 for item in songs_dict.items():                # ПРОХОДИМ ПО ПЕСНЯМ
-                    save_song_on_disc(app=app, art=art, song_dict=item, parent=art_list[1], dir=dir)
+                    save_song_on_disk(app=app, art=art, song_dict=item, parent=art_list[1], dir=dir)
                     sleep(app.my_delay)
             # Обновление значения ProgressBar
             count += 1
@@ -359,6 +368,106 @@ def invert_resave_data(app):
     app.resave_data_option = not app.resave_data_option
 
 
+def save_settings_to_disk(app):
+    set_dict = {"delay": app.my_delay, "main_url": app.my_main_url}
+    try:
+        with open("setting.json", "w") as f:
+            json.dump(set_dict, f)
+    except Exception as msg:
+        print(msg)
+
+def save_settings_button_press(app, set_top, entry_url, entry_delay):
+
+    def check_url(url):
+        # проверка существования адреса
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
+                        AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
+            requests.get(url, headers=headers)
+        except Exception as msg:
+            print("[check_url] Ошибка запроса:", msg)
+            return None
+        return url
+
+    def check_delay(delay):
+        # проверка задержки. delay - число вещественное, диапазон от 0 до 5
+        try:
+            result = float(delay)
+            if not 0<=result<=5:
+                result = None
+        except ValueError:
+            result = None
+        return result
+
+    result_check_url = check_url(entry_url.get())
+    result_check_delay = check_delay(entry_delay.get())
+
+    if result_check_url and not result_check_delay is None:
+        app.my_delay = result_check_delay
+        app.my_main_url = result_check_url
+        save_settings_to_disk(app)
+        set_top.destroy()
+    elif result_check_url and result_check_delay is None:
+        mes_box.showerror("Ошибка значения",
+                          "Задержка может быть только в диапазоне от 0 до 5 сек",
+                          parent=set_top)
+        entry_delay.focus()
+    elif not result_check_url and not result_check_delay is None:
+        mes_box.showerror("Ошибка значения", "Указанный адрес не существует", parent=set_top)
+        entry_url.focus()
+    elif not result_check_url and result_check_delay is None:
+        mes_box.showerror("Ошибка значений",
+                          "Указанный адрес не существует. \nЗадержка может быть только в диапазоне от 0 до 5 сек",
+                          parent=set_top)
+        entry_url.focus()
+
+
+def init_widgets_toplevel(set_top, app):
+
+    frame1 = ttk_bs.LabelFrame(set_top)
+    frame1.pack(expand=True, fill="both")
+    # Установка URL
+    label_url = ttk_bs.Label(frame1, text="URL главной страницы AmDm.ru:", anchor="e", width=40)
+    label_url.grid(column=0, row=0, columnspan=3, padx=10, pady=10)
+    entry_url = ttk_bs.Entry(frame1, width=30)
+    entry_url.insert(0, app.my_main_url)
+    entry_url.grid(column=4, row=0, columnspan=3, padx=10, pady=10)
+    # Установка задержки при запросах на сервер
+    label_delay = ttk_bs.Label(frame1, text="Задержка при запросах на сервер (сек):", anchor="e", width=40)
+    label_delay.grid(column=0, row=1, columnspan=3, padx=10, pady=10)
+    entry_delay = ttk_bs.Entry(frame1, width=30)
+    entry_delay.insert(0, app.my_delay)
+    entry_delay.grid(column=4, row=1, columnspan=3, padx=10, pady=10)
+
+    frame2 = ttk_bs.LabelFrame(set_top)
+    frame2.pack(expand=True, fill="both")
+    # Кнопка "Сохранить параметры)
+
+    btn_save = ttk_bs.Button(frame2, text="Сохранить параметры", width=25, padding=5,
+                             command=lambda: save_settings_button_press(app, set_top, entry_url, entry_delay))
+    btn_save.pack(anchor="center", pady=10)
+
+
+
+
+def settings_button_press(app:ttk_bs.Window):
+    if "Toplevel" not in str(app.winfo_children()):
+
+        set_top = ttk_bs.Toplevel(title="Настройки", topmost=True, resizable=(False,False))
+        init_widgets_toplevel(set_top, app)
+
+        set_top.update_idletasks()
+        t_height = set_top.winfo_height()
+        t_width = set_top.winfo_width()
+        a_height = app.winfo_height()
+        a_width = app.winfo_width()
+        xpos = app.winfo_x() + ((a_width - t_width) // 2)
+        ypos = app.winfo_y() + ((a_height - t_height) // 2)
+        set_top.geometry(f'+{xpos}+{ypos}')
+        # set_top.attributes("-topmost", True)
+
+
+
 def init_widgets(app):
     string_1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     string_2 = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
@@ -394,7 +503,7 @@ def init_widgets(app):
 
     btn3 = ttk_bs.Button(up_frame,
                          text="Настройки",
-
+                         command=lambda: settings_button_press(app)
                         )
     btn3.pack(side="right", padx=5, pady=5)
 
@@ -409,18 +518,19 @@ def init_widgets(app):
     #     ПАНЕЛЬ НАВИГАЦИИ ПО ИСПОЛНИТЕЛЯМ
     middle_frame = ttk_bs.LabelFrame(app, text="Исполнители", )
     middle_frame.pack(fill=ttk_bs.BOTH, expand=True)
-    main_book = ttk_bs.Notebook(middle_frame, padding=5)
+    main_book = ttk_bs.Notebook(middle_frame, padding=5, bootstyle="dark")
     main_book.pack(expand=True, fill=ttk_bs.BOTH)
     frame1 = ttk_bs.Frame(main_book)
     frame2 = ttk_bs.Frame(main_book)
     frame3 = ttk_bs.Frame(main_book)
-    frame1.pack(fill=ttk_bs.BOTH, expand=True)
+
     frame2.pack(fill=ttk_bs.BOTH, expand=True)
-    frame3.pack(fill=ttk_bs.BOTH, expand=True)
     main_book.add(frame2, text="    Русские буквы (А..Я)    ")
     load_data_to_sheets(string_2, frame2, app)
+    frame1.pack(fill=ttk_bs.BOTH, expand=True)
     main_book.add(frame1, text="    Английские буквы (A..Z)    ")
     load_data_to_sheets(string_1, frame1, app)
+    frame3.pack(fill=ttk_bs.BOTH, expand=True)
     main_book.add(frame3, text="    Цифровые символы (0..9)    ")
     load_data_to_sheets(string_3, frame3, app)
 
@@ -451,7 +561,7 @@ def first_start(app):
 
     def ask(app):
         mes_box_text = f"Начать загрузку исполнителей c ресурса {app.my_main_url}?"
-        if mes_box.askyesnocancel("Загрузка исполнителей", mes_box_text):
+        if mes_box.askyesnocancel("Загрузка исполнителей", mes_box_text) and app.my_main_url:
             reload_artists(app)
 
     up_frame = ttk_bs.Frame(app)
@@ -475,13 +585,13 @@ def first_start(app):
     ask(app)
 
 
-def init_gui(main_url, main_data):
+def init_gui(main_url, main_data, delay):
     app = ttk_bs.Window(themename="superhero")
     app.my_main_url = main_url
     app.my_main_data = main_data
     app.destroy_flag = False
     app.resave_data_option = ttk_bs.IntVar(value=0)
-    app.my_delay = 0  # Задержка при цикличном обращении к сайту
+    app.my_delay = delay  # Задержка при цикличном обращении к сайту
     app.queue_on_download = {}
     try:
         app.saved_data = set(load_saved_data_from_json())
@@ -502,9 +612,9 @@ def init_gui(main_url, main_data):
 
 
 def main():
-    main_url = "https://amdm.j118.ru"
+    delay, main_url = load_settings_from_json()
     main_data = load_artists_from_json()
-    init_gui(main_url, main_data)
+    init_gui(main_url, main_data, delay)
 
 
 if __name__ == "__main__":
