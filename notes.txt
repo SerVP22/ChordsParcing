@@ -27,7 +27,7 @@
 ++++++++++  Уведомление (Dialog Window) об успешной загрузке песен
 ++++++++++  Уведомление (Dialog Window) об успешном обновлении артистов
 * Браузер песен toplevel (динамичные Frame)
-* toplevel настройки. задержка, main_url
+++++++++++ toplevel настройки. задержка, main_url
 * О программе
 * Иконки для кнопок и окон
 * Кнопка "Отменить скачивание"
@@ -40,3 +40,8 @@
 * Блокировка кнопок во время закачек, в т.ч. на стартовой странице
 * Отработка отсутствия файла настроек
 * функционал вставки в Entry main_url
+
+
+File "H:\Coding\Python\Projects\!MY_PROJECTS\InternetParsing\ChordsParcing\ChParcing.py", line 271, in save_song_on_disk
+    with open(path, "w", encoding="utf-8") as f:
+FileNotFoundError: [Errno 2] No such file or directory: 'AmDm_Data\\К\\Кобыла и Трупоглазые Жабы Искали Цезию, Нашли Поздно Утром Свистящего Хна\\Кобыла и Трупоглазые Жабы Искали Цезию, Нашли Поздно Утром Свистящего Хна - 001 Драконы, замки и кабан.txt'

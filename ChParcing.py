@@ -237,7 +237,7 @@ def clear_file_name(file_name: str) -> str:
     :param file_name: str
     :return: str
     """
-    bad_ch = """:"><*?|"""
+    bad_ch = """:"><*?|\n\t"""
     new_str = ""
     for ch in file_name:
         if ch in "\/":
@@ -248,18 +248,63 @@ def clear_file_name(file_name: str) -> str:
     return new_str
 
 
+def check_lenght_name(path):
+    if len(path)>255:
+        return "BAD" #недопустимая длина имени файла
+    else:
+        return "GOOD"
+
+
 def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) -> None:
+    """
+
+    :param app: Ссылка на объект приложения
+    :param art: Название исполнителя
+    :param song_dict: кортеж (название песни, ссылка на песню)
+    :param parent: Литера, к которой относится исполнитель
+    :param dir: Название директории для сохранения базы файлов
+    :return: None
+    """
     print(song_dict)
     artist = clear_file_name(art.strip())
     dir_name = os.path.join(dir, parent, artist)
-    if not os.path.isdir(dir_name):
-        os.makedirs(dir_name)                            # создаём папку под исполнителя
+
+    # создаём папку под исполнителя
+    try:
+        if not os.path.isdir(dir_name):
+            os.makedirs(dir_name)
+    except OSError as msg: # недопустимая длина пути
+        print(msg)
+        dir_name = os.path.join(dir, parent, artist.split()[0]) # Обрезаем название исполнителя.
+                                                                # Новое название - первое слово названия
+        if not os.path.isdir(dir_name):
+            os.makedirs(dir_name)
+        # Создаём файл с информацией об исходном имени исполнителя
+        try:
+            info_file_name = os.path.join(dir_name, "[INFO].txt")
+            with open(info_file_name, "w", encoding="utf-8") as f:
+                f.writelines(f"Исходное название исполнителя: {artist}")
+        except Exception as msg:
+            print(msg)
+
+
     file_name = artist + " - " + clear_file_name(str(song_dict[0]))
     app.my_st_bar.configure(text=f"[ЗАГРУЗКА ПЕСЕН] {file_name}")
     app.my_st_bar.update()
-
     path = os.path.join(dir_name, file_name + ".txt")
 
+    #проверка на длину имени файла
+    result_check = check_lenght_name(path)
+    if result_check == "BAD":
+        new_file_name = artist.split()[0]
+        real_path = os.path.join(dir_name, new_file_name + ".txt")
+        if check_lenght_name(real_path) == "BAD":
+            print(f"[СЛИШКОМ ДЛИННОЕ ИМЯ ФАЙЛА] {real_path}")
+            return
+    elif result_check == "GOOD":
+        real_path = path
+
+    # получаем текст песни
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
                     AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
@@ -268,18 +313,24 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
         print("Ошибка запроса:", msg)
         return
     send = BeautifulSoup(req.text, "html.parser")
-    with open(path, "w", encoding="utf-8") as f:
-        search = send.find("h1")
-        f.write(search.text)
-        f.writelines("\n\n")
-        f.write("*" * 60)
-        f.writelines("\n\n")
-        search = send.find_all("pre")
-        for i in search:
-            f.write(i.text)
+
+    # пишем текст песни в файл
+    try:
+        with open(real_path, "w", encoding="utf-8") as f:
+            search = send.find("h1")
+            f.write(search.text)
             f.writelines("\n\n")
             f.write("*" * 60)
             f.writelines("\n\n")
+            search = send.find_all("pre")
+            for i in search:
+                f.write(i.text)
+                f.writelines("\n\n")
+                f.write("*" * 60)
+                f.writelines("\n\n")
+    except Exception as msg:
+        print("Ошибка записи файла песни:", msg)
+        return
 
 
 def load_saved_data_from_json():
@@ -448,8 +499,6 @@ def init_widgets_toplevel(set_top, app):
     btn_save.pack(anchor="center", pady=10)
 
 
-
-
 def settings_button_press(app:ttk_bs.Window):
     if "Toplevel" not in str(app.winfo_children()):
 
@@ -464,8 +513,7 @@ def settings_button_press(app:ttk_bs.Window):
         xpos = app.winfo_x() + ((a_width - t_width) // 2)
         ypos = app.winfo_y() + ((a_height - t_height) // 2)
         set_top.geometry(f'+{xpos}+{ypos}')
-        # set_top.attributes("-topmost", True)
-
+        set_top.attributes("-topmost", True)
 
 
 def init_widgets(app):
