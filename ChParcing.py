@@ -54,27 +54,32 @@ def get_all_artists_on_page(url):
         return None
 
 
-def get_all_songs_for_artist(url) -> dict | None:
+def get_all_songs_for_artist(app, url) -> dict | None:
     """
     url: ссылка на страницу исполнителя
     возвращает словарь {"Песня":"Ссылка", ...} для всех песен
     """
     def get_str_for_num(num):
-        if num > 999:
+        if num > 9999:
             print("Ого! Не может быть такого количества песен!")
+            return ""
         else:
             str_num = str(num)
-            if len(str_num) == 3:
+            if len(str_num) == 4:
                 return str_num
-            elif len(str_num) == 2:
+            elif len(str_num) == 3:
                 return "0" + str_num
-            else:
+            elif len(str_num) == 2:
                 return "00" + str_num
+            else:
+                return "000" + str_num
+
+    # url = check_url_and_main_url(app, url)
 
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
                     AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-        req = requests.get(url, headers=headers)
+        req = requests.get(url, headers=headers, allow_redirects=True)
         send = BeautifulSoup(req.text, "html.parser")
         table = send.find("table", id="tablesort")
         all_a = table.find_all("a")
@@ -87,6 +92,9 @@ def get_all_songs_for_artist(url) -> dict | None:
     except Exception as msg:
         print(msg)
         return None
+    # finally:
+    #     print(req.status_code)
+    #     print(req.history)
 
 
 def item_selected(event, tree, app):
@@ -249,10 +257,17 @@ def clear_file_name(file_name: str) -> str:
 
 
 def check_lenght_name(path):
-    if len(path)>255:
-        return "BAD" #недопустимая длина имени файла
-    else:
-        return "GOOD"
+    return len(path)<=255
+
+
+# def check_url_and_main_url(app, url:str):
+#     wrong_url = "amdm.ru"
+#     if wrong_url in url:
+#         result = url.replace(wrong_url, app.my_main_url.split(sep="/")[2])
+#         print(result)
+#         return result
+#     else:
+#         return url
 
 
 def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) -> None:
@@ -265,6 +280,7 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
     :param dir: Название директории для сохранения базы файлов
     :return: None
     """
+
     print(song_dict)
     artist = clear_file_name(art.strip())
     dir_name = os.path.join(dir, parent, artist)
@@ -273,8 +289,8 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
     try:
         if not os.path.isdir(dir_name):
             os.makedirs(dir_name)
-    except OSError as msg: # недопустимая длина пути
-        print(msg)
+    except OSError as msg1: # недопустимая длина пути
+        print(msg1)
         dir_name = os.path.join(dir, parent, artist.split()[0]) # Обрезаем название исполнителя.
                                                                 # Новое название - первое слово названия
         if not os.path.isdir(dir_name):
@@ -284,39 +300,40 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
             info_file_name = os.path.join(dir_name, "[INFO].txt")
             with open(info_file_name, "w", encoding="utf-8") as f:
                 f.writelines(f"Исходное название исполнителя: {artist}")
-        except Exception as msg:
-            print(msg)
+        except Exception as msg2:
+            print(msg2)
 
-
-    file_name = artist + " - " + clear_file_name(str(song_dict[0]))
+    # проверка на длину имени файла
+    song_name = clear_file_name(str(song_dict[0]))
+    file_name = artist + " - " + song_name
     app.my_st_bar.configure(text=f"[ЗАГРУЗКА ПЕСЕН] {file_name}")
     app.my_st_bar.update()
     path = os.path.join(dir_name, file_name + ".txt")
-
-    #проверка на длину имени файла
-    result_check = check_lenght_name(path)
-    if result_check == "BAD":
-        new_file_name = artist.split()[0]
-        real_path = os.path.join(dir_name, new_file_name + ".txt")
-        if check_lenght_name(real_path) == "BAD":
-            print(f"[СЛИШКОМ ДЛИННОЕ ИМЯ ФАЙЛА] {real_path}")
+    work_dir = os.getcwd()
+    modify_artist = artist
+    while not check_lenght_name(os.path.join(work_dir + path)):
+        splitted_name_artist = modify_artist.split()
+        modify_artist = " ".join(splitted_name_artist[0:-1])
+        file_name = modify_artist + " - " + song_name
+        path = os.path.join(dir_name, file_name + ".txt")
+        if len(splitted_name_artist)<2:
+            print(f"[СЛИШКОМ ДЛИННОЕ ИМЯ ФАЙЛА] {path}")
             return
-    elif result_check == "GOOD":
-        real_path = path
 
     # получаем текст песни
+    url_song = song_dict[1]  # check_url_and_main_url(app, song_dict[1])
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
                     AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-        req = requests.get(song_dict[1], headers=headers)
-    except Exception as msg:
-        print("Ошибка запроса:", msg)
+        req = requests.get(url_song, headers=headers)
+    except Exception as msg3:
+        print("Ошибка запроса:", msg3)
         return
     send = BeautifulSoup(req.text, "html.parser")
 
     # пишем текст песни в файл
     try:
-        with open(real_path, "w", encoding="utf-8") as f:
+        with open(path, "w", encoding="utf-8") as f:
             search = send.find("h1")
             f.write(search.text)
             f.writelines("\n\n")
@@ -328,8 +345,9 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
                 f.writelines("\n\n")
                 f.write("*" * 60)
                 f.writelines("\n\n")
-    except Exception as msg:
-        print("Ошибка записи файла песни:", msg)
+    except Exception as msg4:
+        print("Ошибка записи файла песни:", msg4)
+        print('[DEBUG] ' + work_dir + path)
         return
 
 
@@ -344,12 +362,15 @@ def load_saved_data_from_json():
 
 def load_settings_from_json():
     try:
-        with open("setting.json", "r") as f:
+        with open("settings.json", "r") as f:
             data = json.load(f)
             return data["delay"], data["main_url"]
     except FileNotFoundError as msg:
-        print("Не могу прочитать файл setting.json", msg)
-        return None
+        print("Не могу прочитать файл settings.json", msg)
+        return (None, None)
+    except Exception as msg:
+        print("Нет данных из файла settings.json", msg)
+        return (None, None)
 
 def update_saved_data_file(app):
     try:
@@ -359,6 +380,28 @@ def update_saved_data_file(app):
         print("Не могу записать в файл saved_data.json", msg)
 
 def download_songs(app, dir):
+
+    def save_last_artist(artist):
+        data = {}
+
+        try:
+            with open("settings.json", "r") as f:
+                data =  json.load(f)
+        except FileNotFoundError as msg:
+            print("Не могу прочитать файл settings.json", msg)
+        except Exception as msg:
+            print("Нет данных из файла settings.json", msg)
+
+
+        data["last_artist"] = artist
+
+        try:
+            with open("settings.json", "w") as f:
+                json.dump(data, f)
+        except Exception as msg:
+            print("Ошибка сохранения файла settings.json", msg)
+            return
+
     queue_len = len(app.queue_on_download)
     if queue_len:
         if queue_len == 1: #  если в очереди только 1 элемент, значение ProgressBar устанавливаем в 50%
@@ -366,11 +409,14 @@ def download_songs(app, dir):
             app.my_pr_bar.update()
         count = 0
         for art, art_list in app.queue_on_download.items():         # ПРОХОДИМ ПО ИСПОЛНИТЕЛЯМ
-            songs_dict = get_all_songs_for_artist(art_list[0])
+
+            save_last_artist(art) # сохранение текущего исполнителя в качестве последнего
+
+            songs_dict = get_all_songs_for_artist(app, art_list[0])
             if songs_dict:
                 for item in songs_dict.items():                # ПРОХОДИМ ПО ПЕСНЯМ
                     save_song_on_disk(app=app, art=art, song_dict=item, parent=art_list[1], dir=dir)
-                    sleep(app.my_delay)
+                    sleep(app.my_delay) if app.my_delay else ...
             # Обновление значения ProgressBar
             count += 1
             v = int(count / queue_len * 100)
@@ -393,25 +439,34 @@ def download_all_data_button_press(app):
                               "Загрузка всего архива песен занимает продолжительное время. Продолжить операцию?"):
         download_all_data(app)
 
+
+def check_artist_in_base(download_dir, parent, artist):
+    artist_path = os.path.join(download_dir, parent, artist)
+    return True if os.path.isdir(artist_path) else False
+
 def download_all_data(app):
 
     def get_all_data_queue(main_data):
         queue = {}
         for list_dict_ch in main_data.values():  # [{artist: [url, parent]}, ]
             for artist, (link, parent) in list_dict_ch[1].items():
-                # if parent == "Ш": # ТЕСТ
-                    queue[artist] = (link, parent)
+                if parent == "К": # ТЕСТ
+                    if app.resave_data_option.get():
+                        queue[artist] = (link, parent)
+                    else:
+                        if not check_artist_in_base(download_dir, parent, artist):
+                            queue[artist] = (link, parent)
                 # print(artist, link, parent)
         return queue
 
 
-
+    download_dir = "AmDm_Data"
     print("Загрузка всех данных. Начало операции:", datetime.now())
     # В очередь закачки добавляем всех исполнителей из main_data
     app.queue_on_download.clear()
     app.queue_on_download = get_all_data_queue(app.my_main_data)
     # print(app.queue_on_download)
-    download_songs(app, dir="AmDm_Data")
+    download_songs(app, dir=download_dir)
     print("Загрузка всех данных. Конец операции:", datetime.now())
     app.queue_on_download.clear()
 
@@ -420,12 +475,26 @@ def invert_resave_data(app):
 
 
 def save_settings_to_disk(app):
-    set_dict = {"delay": app.my_delay, "main_url": app.my_main_url}
+    data = {}
+
     try:
-        with open("setting.json", "w") as f:
-            json.dump(set_dict, f)
+        with open("settings.json", "r") as f:
+            data = json.load(f)
+    except FileNotFoundError as msg:
+        print("Не могу прочитать файл settings.json", msg)
     except Exception as msg:
-        print(msg)
+        print("Нет данных из файла settings.json", msg)
+
+    data["delay"] = app.my_delay
+    data["main_url"] = app.my_main_url
+
+    try:
+        with open("settings.json", "w") as f:
+            json.dump(data, f)
+    except Exception as msg:
+        print("Ошибка сохранения файла settings.json", msg)
+        return
+
 
 def save_settings_button_press(app, set_top, entry_url, entry_delay):
 
@@ -436,7 +505,7 @@ def save_settings_button_press(app, set_top, entry_url, entry_delay):
                         AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
             requests.get(url, headers=headers)
         except Exception as msg:
-            print("[check_url] Ошибка запроса:", msg)
+            print("[check_url_and_main_url] Ошибка запроса:", msg)
             return None
         return url
 
@@ -481,13 +550,13 @@ def init_widgets_toplevel(set_top, app):
     label_url = ttk_bs.Label(frame1, text="URL главной страницы AmDm.ru:", anchor="e", width=40)
     label_url.grid(column=0, row=0, columnspan=3, padx=10, pady=10)
     entry_url = ttk_bs.Entry(frame1, width=30)
-    entry_url.insert(0, app.my_main_url)
+    entry_url.insert(0, str(app.my_main_url))
     entry_url.grid(column=4, row=0, columnspan=3, padx=10, pady=10)
     # Установка задержки при запросах на сервер
     label_delay = ttk_bs.Label(frame1, text="Задержка при запросах на сервер (сек):", anchor="e", width=40)
     label_delay.grid(column=0, row=1, columnspan=3, padx=10, pady=10)
     entry_delay = ttk_bs.Entry(frame1, width=30)
-    entry_delay.insert(0, app.my_delay)
+    entry_delay.insert(0, str(app.my_delay))
     entry_delay.grid(column=4, row=1, columnspan=3, padx=10, pady=10)
 
     frame2 = ttk_bs.LabelFrame(set_top)
