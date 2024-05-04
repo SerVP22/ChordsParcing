@@ -1,6 +1,8 @@
 # python 3.10
 
 import json
+
+from log import logger
 from time import sleep
 from datetime import datetime
 
@@ -21,7 +23,8 @@ def get_dict_liters_from_main_url(url):
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
                                 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
         req = requests.get(url, headers=headers)
-        print(req)
+        # print(req)
+        logger.info(f"App is get response: {req}")
         send = BeautifulSoup(req.text, "html.parser")
         div = send.find_all("div", class_="alphabet g-margin")
 
@@ -30,8 +33,9 @@ def get_dict_liters_from_main_url(url):
         dict_liters = {i.text: url + i.get("href") for i in search}
         return dict_liters
     except Exception as msg:
-        print(msg)
-        return None
+        # print(msg)
+        logger.error(f"App is get Exception: {msg}")
+        return
 
 
 def get_all_artists_on_page(url):
@@ -50,8 +54,9 @@ def get_all_artists_on_page(url):
             artists_dict[i.text] = i.get("href")
         return artists_dict
     except Exception as msg:
-        print(msg)
-        return None
+        # print(msg)
+        logger.error(f"App is get Exception: {msg}")
+        return
 
 
 def get_all_songs_for_artist(app, url) -> dict | None:
@@ -61,7 +66,8 @@ def get_all_songs_for_artist(app, url) -> dict | None:
     """
     def get_str_for_num(num):
         if num > 9999:
-            print("Ого! Не может быть такого количества песен!")
+            # print("Ого! Не может быть такого количества песен!")
+            logger.error(f"Превышено количество песен для директории")
             return ""
         else:
             str_num = str(num)
@@ -90,8 +96,9 @@ def get_all_songs_for_artist(app, url) -> dict | None:
             song_dict[get_str_for_num(count) + " " + i.text] = i.get("href")
         return song_dict
     except Exception as msg:
-        print(msg)
-        return None
+        # print(msg)
+        logger.error(f"App is get Exception: {msg}")
+        return
     # finally:
     #     print(req.status_code)
     #     print(req.history)
@@ -108,7 +115,8 @@ def item_selected(event, tree, app):
             if artist in app.queue_on_download.keys():
                 app.queue_on_download.pop(artist)
         tree.set(tree.selection(), column="#2", value=val)
-        print(app.queue_on_download)
+        # print(app.queue_on_download)
+        logger.info(f"Очередь загрузки: {app.queue_on_download}")
 
     # Получаем значения из таблицы
     artist, stat_queue, _, link, parent = tree.item(tree.selection(), option="values")
@@ -125,11 +133,10 @@ def load_artists_from_json():
     try:
         with open("main_data.json", "r") as f:
             data = json.load(f)
-        # print(data)
         return data
     except FileNotFoundError as msg:
-        print("Не могу прочитать файл. ", msg)
-        return None
+        # print("Не могу прочитать файл. ", msg)
+        logger.error(f"Ошибка доступа к файлу: {msg}")
 
 
 def reload_artists_button_press(app):
@@ -164,16 +171,18 @@ def reload_artists(app):
         try:
             with open("main_data.json", "w") as f:
                 json.dump(main_dict, f)
-            print("Файл JSON создан")
+            # print("Файл JSON создан")
+            logger.info(f"Файл JSON создан")
         except Exception as msg:
-            print("Не могу записать в файл. ", msg)
+            # print("Не могу записать в файл. ", msg)
+            logger.error(f"App is get Exception (Не могу записать в файл): {msg}")
 
         reload_app(app)
         mes_box.showinfo("Информация", "Обновление списка исполнителей завершено")
 
     else:
-        print("Невозможно получить данные с ресурса:", app.my_main_url)
-
+        # print("Невозможно получить данные с ресурса:", app.my_main_url)
+        logger.error(f"Невозможно получить данные с ресурса: {app.my_main_url}")
 
 def load_data_to_sheets(string_of_characters, frame, app):
 
@@ -209,7 +218,8 @@ def load_data_to_sheets(string_of_characters, frame, app):
                             )
         except Exception as msg:
             tree.insert("", ttk_bs.END, values=("Нет исполнителей", "", "", "", ""))
-            print("Загрузка локальных данных. Нет данных для:", msg)
+            # print("Загрузка локальных данных. Нет данных для:", msg)
+            logger.info(f"Загрузка локальных данных. Нет данных для: {msg}")
 
         scroll = ttk_bs.Scrollbar(temp_frame, command=tree.yview)
         tree.configure(yscrollcommand=scroll.set)
@@ -228,8 +238,8 @@ def load_data_to_sheets(string_of_characters, frame, app):
             for i in string_of_characters:
                 create_sheet_for_characters(book, i)
     else:
-        print("ОШИБКА! load_data_to_sheets: нет строки на входе")
-
+        # print("ОШИБКА! load_data_to_sheets: нет строки на входе")
+        logger.error("[load_data_to_sheets]: нет строки на входе")
 
 def reload_app(app):
     if app:
@@ -281,7 +291,8 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
     :return: None
     """
 
-    print(song_dict)
+    # print(song_dict)
+    logger.info(f"Запись на диск: {song_dict}")
     artist = clear_file_name(art.strip())
     dir_name = os.path.join(dir, parent, artist)
 
@@ -290,7 +301,8 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
         if not os.path.isdir(dir_name):
             os.makedirs(dir_name)
     except OSError as msg1: # недопустимая длина пути
-        print(msg1)
+        # print(msg1)
+        logger.error(f"App is get Exception OSError: {msg1}")
         dir_name = os.path.join(dir, parent, artist.split()[0]) # Обрезаем название исполнителя.
                                                                 # Новое название - первое слово названия
         if not os.path.isdir(dir_name):
@@ -301,8 +313,8 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
             with open(info_file_name, "w", encoding="utf-8") as f:
                 f.writelines(f"Исходное название исполнителя: {artist}")
         except Exception as msg2:
-            print(msg2)
-
+            # print(msg2)
+            logger.error(f"App is get Exception: {msg2}")
     # проверка на длину имени файла
     song_name = clear_file_name(str(song_dict[0]))
     file_name = artist + " - " + song_name
@@ -317,7 +329,8 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
         file_name = modify_artist + " - " + song_name
         path = os.path.join(dir_name, file_name + ".txt")
         if len(splitted_name_artist)<2:
-            print(f"[СЛИШКОМ ДЛИННОЕ ИМЯ ФАЙЛА] {path}")
+            # print(f"[СЛИШКОМ ДЛИННОЕ ИМЯ ФАЙЛА] {path}")
+            logger.error(f"[СЛИШКОМ ДЛИННОЕ ИМЯ ФАЙЛА] {path}")
             return
 
     # получаем текст песни
@@ -327,7 +340,8 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
                     AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
         req = requests.get(url_song, headers=headers)
     except Exception as msg3:
-        print("Ошибка запроса:", msg3)
+        # print("Ошибка запроса:", msg3)
+        logger.error(f"App is get Exception [Ошибка запроса по адресу песни] {msg3}")
         return
     send = BeautifulSoup(req.text, "html.parser")
 
@@ -346,8 +360,10 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
                 f.write("*" * 60)
                 f.writelines("\n\n")
     except Exception as msg4:
-        print("Ошибка записи файла песни:", msg4)
-        print('[DEBUG] ' + work_dir + path)
+        # print("Ошибка записи файла песни:", msg4)
+        # print('[DEBUG] ' + work_dir + path)
+        logger.error(f"App is get Exception [Ошибка записи файла песни]: {msg4}")
+        logger.error(f"[DEBUG] {work_dir + path}")
         return
 
 
@@ -356,51 +372,61 @@ def load_saved_data_from_json():
         with open("saved_data.json", "r") as f:
             return json.load(f)
     except FileNotFoundError as msg:
-        print("Не могу прочитать файл saved_data.json", msg)
-        return None
+        # print("Не могу прочитать файл saved_data.json", msg)
+        logger.error(f"App is get Exception [Ошибка чтения файла saved_data.json]: {msg}")
+        return
 
 
 def load_settings_from_json():
     try:
         with open("settings.json", "r") as f:
-            data = json.load(f)
-            return data["delay"], data["main_url"]
+            return json.load(f)
     except FileNotFoundError as msg:
-        print("Не могу прочитать файл settings.json", msg)
-        return (None, None)
+        # print("Не могу прочитать файл settings.json", msg)
+        logger.error(f"App is get Exception [Ошибка чтения файла settings.json]: {msg}")
+        return {}
     except Exception as msg:
-        print("Нет данных из файла settings.json", msg)
-        return (None, None)
+        # print("Нет данных из файла settings.json", msg)
+        logger.error(f"App is get Exception [Нет данных из файла settings.json]: {msg}")
+        return {}
 
 def update_saved_data_file(app):
     try:
         with open("saved_data.json", "w") as f:
             json.dump(list(app.saved_data), f)
     except Exception as msg:
-        print("Не могу записать в файл saved_data.json", msg)
+        # print("Не могу записать в файл saved_data.json", msg)
+        logger.error(f"App is get Exception [Ошибка записи в файл saved_data.json]: {msg}")
+
+def save_settings_to_json(data):
+    try:
+        with open("settings.json", "w") as f:
+            json.dump(data, f)
+    except Exception as msg:
+        # print("Ошибка сохранения файла settings.json", msg)
+        logger.error(f"App is get Exception [Ошибка записи файла settings.json]: {msg}")
 
 def download_songs(app, dir):
 
     def save_last_artist(artist):
-        data = {}
+        # data = {}
 
-        try:
-            with open("settings.json", "r") as f:
-                data =  json.load(f)
-        except FileNotFoundError as msg:
-            print("Не могу прочитать файл settings.json", msg)
-        except Exception as msg:
-            print("Нет данных из файла settings.json", msg)
+        # try:
+        #     with open("settings.json", "r") as f:
+        #         data =  json.load(f)
+        # except FileNotFoundError as msg:
+        #     # print("Не могу прочитать файл settings.json", msg)
+        #     logger.error(f"App is get Exception [Ошибка чтения файла settings.json]: {msg}")
+        # except Exception as msg:
+        #     # print("Нет данных из файла settings.json", msg)
+        #     logger.error(f"App is get Exception [Нет данных из файла settings.json]: {msg}")
 
+        data = load_settings_from_json()
 
         data["last_artist"] = artist
 
-        try:
-            with open("settings.json", "w") as f:
-                json.dump(data, f)
-        except Exception as msg:
-            print("Ошибка сохранения файла settings.json", msg)
-            return
+        save_settings_to_json(data)
+
 
     queue_len = len(app.queue_on_download)
     if queue_len:
@@ -431,7 +457,8 @@ def download_songs(app, dir):
             reload_app(app)
         mes_box.showinfo("Информация", "Загрузка песен завершена")
     else:
-        print("Очередь загрузки пуста!")
+        # print("Очередь загрузки пуста!")
+        logger.info("Очередь загрузки пуста!")
 
 
 def download_all_data_button_press(app):
@@ -461,13 +488,19 @@ def download_all_data(app):
 
 
     download_dir = "AmDm_Data"
-    print("Загрузка всех данных. Начало операции:", datetime.now())
+    # print("Загрузка всех данных. Начало операции:", datetime.now())
+    logger.info("Загрузка всех данных. Начало операции")
+    start_time = datetime.now()
+
     # В очередь закачки добавляем всех исполнителей из main_data
     app.queue_on_download.clear()
     app.queue_on_download = get_all_data_queue(app.my_main_data)
     # print(app.queue_on_download)
     download_songs(app, dir=download_dir)
-    print("Загрузка всех данных. Конец операции:", datetime.now())
+
+    delta = datetime.now() - start_time
+    # print("Загрузка всех данных. Конец операции:", datetime.now())
+    logger.info(f"Загрузка всех данных. Конец операции. Продолжительность (сек.): {delta.total_seconds()}")
     app.queue_on_download.clear()
 
 def invert_resave_data(app):
@@ -475,26 +508,27 @@ def invert_resave_data(app):
 
 
 def save_settings_to_disk(app):
-    data = {}
+    # data = {}
 
-    try:
-        with open("settings.json", "r") as f:
-            data = json.load(f)
-    except FileNotFoundError as msg:
-        print("Не могу прочитать файл settings.json", msg)
-    except Exception as msg:
-        print("Нет данных из файла settings.json", msg)
+    # try:
+    #     with open("settings.json", "r") as f:
+    #         data = json.load(f)
+    # except FileNotFoundError as msg:
+    #     print("Не могу прочитать файл settings.json", msg)
+    # except Exception as msg:
+    #     print("Нет данных из файла settings.json", msg)
+    data = load_settings_from_json()
 
     data["delay"] = app.my_delay
     data["main_url"] = app.my_main_url
 
-    try:
-        with open("settings.json", "w") as f:
-            json.dump(data, f)
-    except Exception as msg:
-        print("Ошибка сохранения файла settings.json", msg)
-        return
-
+    # try:
+    #     with open("settings.json", "w") as f:
+    #         json.dump(data, f)
+    # except Exception as msg:
+    #     print("Ошибка сохранения файла settings.json", msg)
+    #     return
+    save_settings_to_json(data)
 
 def save_settings_button_press(app, set_top, entry_url, entry_delay):
 
@@ -505,8 +539,9 @@ def save_settings_button_press(app, set_top, entry_url, entry_delay):
                         AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
             requests.get(url, headers=headers)
         except Exception as msg:
-            print("[check_url_and_main_url] Ошибка запроса:", msg)
-            return None
+            # print("[check_url_and_main_url] Ошибка запроса:", msg)
+            logger.error(f"App is get Exception [Ошибка запроса при проверке URL]: {msg}")
+            return
         return url
 
     def check_delay(delay):
@@ -668,12 +703,13 @@ def destroy_app(app):
         if res is True:  # Пользователь нажал "Да"
             app.destroy_flag = True
             download_songs(app, dir="DataLib")
-            app.destroy()
-        elif res is False:  # Пользователь нажал "Нет"
-            app.destroy()
-    else:
-        app.destroy()
+            # app.destroy()
+        # elif res is False:  # Пользователь нажал "Нет"
+            # app.destroy()
+    # else:
 
+    app.destroy()
+    logger.info("Приложение ЗАКРЫТО")
 def first_start(app):
 
     def ask(app):
@@ -729,7 +765,15 @@ def init_gui(main_url, main_data, delay):
 
 
 def main():
-    delay, main_url = load_settings_from_json()
+    logger.info("Приложение ЗАПУЩЕНО")
+    # DEFAULT
+    delay = 0.1
+    main_url = "https://amdm.ru"
+
+    settings = load_settings_from_json()
+    if settings:
+        delay = settings["delay"]
+        main_url = settings["main_url"]
     main_data = load_artists_from_json()
     init_gui(main_url, main_data, delay)
 
