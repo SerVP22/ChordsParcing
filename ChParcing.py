@@ -2,7 +2,7 @@
 
 import json
 
-from log import logger
+from log import logger, level_filter
 from time import sleep
 from datetime import datetime
 
@@ -126,12 +126,14 @@ def item_selected(event, tree, app):
         if stat_queue == "-":
             val = "В очереди"
             app.queue_on_download[artist] = (link, parent)
+            logger.info(f"Исполнитель \"{artist}\" добавлен в очередь скачивания")
         else:
             val = "-"
             if artist in app.queue_on_download.keys():
                 app.queue_on_download.pop(artist)
+                logger.info(f"Исполнитель \"{artist}\" удалён из очереди скачивания")
         tree.set(tree.selection(), column="#2", value=val)
-        logger.info(f"Очередь загрузки: {app.queue_on_download}")
+
 
     # Получаем значения из таблицы
     artist, stat_queue, _, link, parent = tree.item(tree.selection(), option="values")
@@ -178,6 +180,7 @@ def reload_artists(app):
                 count += 1
                 v = int(count / dict_liters_len * 100)
                 app.my_pr_bar.configure(value=v)
+                app.percent_label.configure(text=f"[{v:3}%]")
                 app.my_pr_bar.update()
                 app.my_st_bar.configure(text=f'[ОБНОВЛЕНИЕ СПИСКА ИСПОЛНИТЕЛЕЙ] Обновление "{ident}\"')
                 app.my_st_bar.update()
@@ -393,6 +396,9 @@ def save_settings_to_json(data):
     except Exception as msg:
         logger.error(f"App is get Exception [Ошибка записи файла settings.json]: {msg}")
 
+
+# def errors_count_
+
 def download_songs(app, dir):
 
     # def save_last_artist(artist):
@@ -403,8 +409,11 @@ def download_songs(app, dir):
 
     queue_len = len(app.queue_on_download)
     if queue_len:
+        logger.info(f"Очередь загрузки: {app.queue_on_download}")
+        logger.info(f"ЗАГРУЗКА ОЧЕРЕДИ НАЧАТА")
         if queue_len == 1: #  если в очереди только 1 элемент, значение ProgressBar устанавливаем в 50%
             app.my_pr_bar.configure(value=50)
+            app.percent_label.configure(text="[ 50%]")
             app.my_pr_bar.update()
         count = 0
         for artist, artist_list in app.queue_on_download.items():         # ПРОХОДИМ ПО ИСПОЛНИТЕЛЯМ
@@ -426,6 +435,7 @@ def download_songs(app, dir):
             count += 1
             v = int(count / queue_len * 100)
             app.my_pr_bar.configure(value=v)
+            app.percent_label.configure(text=f"[{v:3}%]")
             app.my_pr_bar.update()
 
         app.saved_data.update(set(app.queue_on_download.keys()))  # Добавляем в множество сохранённых исполнителей
@@ -434,9 +444,10 @@ def download_songs(app, dir):
         # Обновляем окно, если пользователь не закрывает приложение
         if not app.destroy_flag:
             reload_app(app)
+        logger.info(f"ЗАГРУЗКА ОЧЕРЕДИ ЗАВЕРШЕНА")
         mes_box.showinfo("Информация", "Загрузка песен завершена")
     else:
-        logger.info("Очередь загрузки пуста!")
+        logger.error("ОЧЕРЕДЬ ЗАГРУЗКИ ПУСТА!")
 
 
 def download_all_data_button_press(app):
@@ -579,8 +590,20 @@ def settings_button_press(app:ttk_bs.Window):
         set_top.geometry(f'+{xpos}+{ypos}')
         set_top.attributes("-topmost", True)
 
+def exec_dir_errors(event):
+    try:
+        path = os.getcwd() + "/logs/errors/"
+        os.startfile(path)
+    except Exception as msg:
+        logger.error("App is get Exception: [Ошибка открытия директории] ", msg)
 
 def init_widgets(app):
+    # if not logger.id_error:
+    #     logger.remove(1)
+    #     logger.add("logs/errors/errors_{time}.log",
+    #                format="{time} | {level} | {message}",
+    #                filter=level_filter(level="ERROR"))
+
     string_1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     string_2 = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
     string_3 = "0..9"
@@ -654,7 +677,11 @@ def init_widgets(app):
     app.my_st_bar.pack(side="left")
     app.my_pr_bar = ttk_bs.Progressbar(status_bar, bootstyle="success-striped", length=200)
     app.my_pr_bar.pack(side="right", padx=5)
-
+    app.percent_label = ttk_bs.Label(status_bar, text="[  0%]", borderwidth=10, foreground="white")
+    app.percent_label.pack(side="right")
+    app.errors_count = ttk_bs.Label(status_bar, text="[Ошибок: 0]", borderwidth=10, foreground="red", cursor="hand2")
+    app.errors_count.pack(side="right")
+    app.errors_count.bind("<ButtonPress>", exec_dir_errors)
 
 def destroy_app(app):
     if app.queue_on_download:  # Срабатывает, если в очереди есть хотя бы один исполнитель
@@ -722,6 +749,7 @@ def init_gui(main_url, main_data, delay):
 def main():
     logger.info("Приложение ЗАПУЩЕНО")
     # DEFAULT
+
     delay = 0.1
     main_url = "https://amdm.ru"
 
