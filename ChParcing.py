@@ -159,6 +159,13 @@ def reload_artists_button_press(app):
     if mes_box.askyesnocancel("Обновление списка исполнителей", "Начать обновление списка исполнителей?"):
         reload_artists(app)
 
+def save_main_data_to_json(main_dict):
+    try:
+        with open("main_data.json", "w") as f:
+            json.dump(main_dict, f)
+        logger.info(f"Файл JSON создан")
+    except Exception as msg:
+        logger.error(f"App is get Exception (Не могу записать в файл): {msg}")
 
 def reload_artists(app):
     main_dict = {}
@@ -185,12 +192,8 @@ def reload_artists(app):
                 app.my_st_bar.configure(text=f'[ОБНОВЛЕНИЕ СПИСКА ИСПОЛНИТЕЛЕЙ] Обновление "{ident}\"')
                 app.my_st_bar.update()
                 # time.sleep(0.5)
-        try:
-            with open("main_data.json", "w") as f:
-                json.dump(main_dict, f)
-            logger.info(f"Файл JSON создан")
-        except Exception as msg:
-            logger.error(f"App is get Exception (Не могу записать в файл): {msg}")
+
+        save_main_data_to_json(main_dict)
 
         reload_app(app)
         mes_box.showinfo("Информация", "Обновление списка исполнителей завершено")
@@ -416,6 +419,7 @@ def download_songs(app, dir):
             app.percent_label.configure(text="[ 50%]")
             app.my_pr_bar.update()
         count = 0
+        black_list = []
         for artist, artist_list in app.queue_on_download.items():         # ПРОХОДИМ ПО ИСПОЛНИТЕЛЯМ
 
             # save_last_artist(art) # сохранение текущего исполнителя в качестве последнего
@@ -429,14 +433,16 @@ def download_songs(app, dir):
                     if app.my_delay:
                         sleep(app.my_delay)
             else:
-                app.queue_on_download.pop(artist)
-                queue_len -= 1
+                black_list.append(artist) # исполнители, которых не удалось сохранить
             # Обновление значения ProgressBar
             count += 1
             v = int(count / queue_len * 100)
             app.my_pr_bar.configure(value=v)
             app.percent_label.configure(text=f"[{v:3}%]")
             app.my_pr_bar.update()
+
+        for artist in black_list:
+            app.queue_on_download.pop(artist) # исключаем чёрный список из окончательной очереди
 
         app.saved_data.update(set(app.queue_on_download.keys()))  # Добавляем в множество сохранённых исполнителей
         update_saved_data_file(app)
@@ -496,24 +502,23 @@ def invert_resave_data(app):
 
 
 def save_settings_to_disk(app):
-    data = load_settings_from_json()
+    data = {}
+    # data = load_settings_from_json()
     data["delay"] = app.my_delay
     data["main_url"] = app.my_main_url
     save_settings_to_json(data)
 
-
+def check_url(url):
+    # проверка существования адреса
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
+                    AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
+        requests.get(url, headers=headers)
+    except Exception as msg:
+        logger.error(f"App is get Exception [Ошибка запроса при проверке URL]: {msg}")
+        return
+    return url
 def save_settings_button_press(app, set_top, entry_url, entry_delay):
-
-    def check_url(url):
-        # проверка существования адреса
-        try:
-            headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
-                        AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-            requests.get(url, headers=headers)
-        except Exception as msg:
-            logger.error(f"App is get Exception [Ошибка запроса при проверке URL]: {msg}")
-            return
-        return url
 
     def check_delay(delay):
         # проверка задержки. delay - число вещественное, диапазон от 0 до 5
@@ -548,9 +553,61 @@ def save_settings_button_press(app, set_top, entry_url, entry_delay):
         entry_url.focus()
 
 
-def init_widgets_toplevel(set_top, app):
+def change_url(app, settings_window, new_url):
+    # обрезаем последний слэш, если он есть
+    if app.my_main_url[-1] == "/":
+        cut_main_url = app.my_main_url[:-1]
+    else:
+        cut_main_url = app.my_main_url
+    if new_url[-1] == "/":
+        cut_new_url = new_url[:-1]
+    else:
+        cut_new_url = new_url
 
-    frame1 = ttk_bs.LabelFrame(set_top)
+    new_main_data = {}
+    for lit, lit_list in app.my_main_data.items():  # проходимся по словарю символов
+
+        new_lit_list = []
+
+        # замена в URL для букв
+        new_lit_list.append(lit_list[0].replace(cut_main_url, cut_new_url))
+
+        new_lit_dict = {}
+
+        for art, art_list in lit_list[1].items(): # проходимся по словарю исполнителей
+            new_art_list = []
+            new_art_list.append(art_list[0].replace(cut_main_url, cut_new_url))      #замена в URL для исполнителей
+            new_art_list.append(lit)
+            new_lit_dict[art] = new_art_list
+
+        new_lit_list.append(new_lit_dict)
+        new_main_data[lit] = new_lit_list
+
+    # dump main_data
+    save_main_data_to_json(new_main_data)
+
+    # dump main_url
+    app.my_main_url = new_url
+    save_settings_to_disk(app)
+
+    # reload app
+    settings_window.destroy()
+    reload_app(app)
+
+def change_url_button_press(app, entry, settings_window):
+    entry_value = entry.get()
+    if check_url(entry_value):
+        change_url(app, settings_window, entry_value)
+    else:
+        mes_box.showinfo("Внимание!", "Новый URL адрес недоступен. Операция отменена")
+        settings_window.focus_set()
+
+
+
+
+def init_widgets_toplevel(settings_window, app):
+
+    frame1 = ttk_bs.LabelFrame(settings_window)
     frame1.pack(expand=True, fill="both")
     # Установка URL
     label_url = ttk_bs.Label(frame1, text="URL главной страницы AmDm.ru:", anchor="e", width=40)
@@ -558,6 +615,8 @@ def init_widgets_toplevel(set_top, app):
     entry_url = ttk_bs.Entry(frame1, width=30)
     entry_url.insert(0, str(app.my_main_url))
     entry_url.grid(column=4, row=0, columnspan=3, padx=10, pady=10)
+
+
     # Установка задержки при запросах на сервер
     label_delay = ttk_bs.Label(frame1, text="Задержка при запросах на сервер (сек):", anchor="e", width=40)
     label_delay.grid(column=0, row=1, columnspan=3, padx=10, pady=10)
@@ -565,19 +624,29 @@ def init_widgets_toplevel(set_top, app):
     entry_delay.insert(0, str(app.my_delay))
     entry_delay.grid(column=4, row=1, columnspan=3, padx=10, pady=10)
 
-    frame2 = ttk_bs.LabelFrame(set_top)
+    frame2 = ttk_bs.LabelFrame(settings_window)
     frame2.pack(expand=True, fill="both")
     # Кнопка "Сохранить параметры)
 
     btn_save = ttk_bs.Button(frame2, text="Сохранить параметры", width=25, padding=5,
-                             command=lambda: save_settings_button_press(app, set_top, entry_url, entry_delay))
+                             command=lambda: save_settings_button_press(app, settings_window, entry_url, entry_delay))
     btn_save.pack(anchor="center", pady=10)
 
+    # Панель замены url в БД
+    frame3 = ttk_bs.LabelFrame(settings_window, text=" Замена URL в базе данных ")
+    frame3.pack(expand=True, fill="both", pady=10)
+    entry_new_url = ttk_bs.Entry(frame3, width=30)
+    update_url_btn = ttk_bs.Button(frame3, text="Подменить URL в БД на:", width=25, padding=5,
+                                   command=lambda: change_url_button_press(app, entry_new_url, settings_window))
+    update_url_btn.grid(column=0, row=0, columnspan=3, padx=50, pady=10)
+    entry_new_url.grid(column=4, row=0, columnspan=3, padx=10, pady=10)
 
 def settings_button_press(app:ttk_bs.Window):
     if "Toplevel" not in str(app.winfo_children()):
 
-        set_top = ttk_bs.Toplevel(title="Настройки", topmost=True, resizable=(False,False))
+        set_top = ttk_bs.Toplevel(title="Настройки",
+                                  topmost=False,
+                                  resizable=(False,False))
         init_widgets_toplevel(set_top, app)
 
         set_top.update_idletasks()
@@ -588,7 +657,7 @@ def settings_button_press(app:ttk_bs.Window):
         xpos = app.winfo_x() + ((a_width - t_width) // 2)
         ypos = app.winfo_y() + ((a_height - t_height) // 2)
         set_top.geometry(f'+{xpos}+{ypos}')
-        set_top.attributes("-topmost", True)
+        # set_top.attributes("-topmost", True)
 
 def exec_dir_errors(event):
     try:
@@ -720,7 +789,7 @@ def first_start(app):
     ask(app)
 
 
-def init_gui(main_url, main_data, delay):
+def init_app(main_url, main_data, delay):
     app = ttk_bs.Window(themename="superhero")
     app.my_main_url = main_url
     app.my_main_data = main_data
@@ -758,7 +827,7 @@ def main():
         delay = settings["delay"]
         main_url = settings["main_url"]
     main_data = load_artists_from_json()
-    init_gui(main_url, main_data, delay)
+    init_app(main_url, main_data, delay)
 
 
 if __name__ == "__main__":
