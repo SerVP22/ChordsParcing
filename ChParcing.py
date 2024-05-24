@@ -1,6 +1,7 @@
 # python 3.10
 
 import json
+import time
 
 from log import logger, level_filter
 from time import sleep
@@ -14,11 +15,12 @@ from tkinter import messagebox as mes_box
 # from PIL import Image, ImageTk
 
 
-def get_dict_liters_from_main_url(url):
+def get_dict_liters_from_main_url(app):
     """
-    url: ссылка на главную страницу ресурса AmDm.ru для парсинга
+
     возвращает словарь {"Символ":"Ссылка", ...} для всех символов на главной странице ресурса
     """
+    url = app.my_main_url
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
                                 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
@@ -33,10 +35,11 @@ def get_dict_liters_from_main_url(url):
         return dict_liters
     except Exception as msg:
         logger.error(f"App is get Exception: {msg}")
-        return
+        check_errors_count(app)
+        app.errors_count +=1
 
 
-def get_all_artists_on_page(url):
+def get_all_artists_on_page(app, url):
     """
     url: ссылка на страницу со списком исполнителей
     возвращает словарь {"Исполнитель":"Ссылка", ...} для всех исполнителей на странице
@@ -53,7 +56,8 @@ def get_all_artists_on_page(url):
         return artists_dict
     except Exception as msg:
         logger.error(f"App is get Exception: {msg}")
-        return
+        check_errors_count(app)
+        app.errors_count += 1
 
 
 def get_all_songs_for_artist(app, url) -> dict | None:
@@ -73,7 +77,7 @@ def get_all_songs_for_artist(app, url) -> dict | None:
         end = msg.rfind("/", start) + 1
         return msg[start:end]
 
-    def get_str_for_num(num):
+    def get_str_for_num(app, num):
         """
         Добавляет в название песни нули к номеру песни по порядку ( 1 -> 0001 )
 
@@ -82,6 +86,8 @@ def get_all_songs_for_artist(app, url) -> dict | None:
         """
         if num > 9999:
             logger.error(f"Превышено количество песен для директории")
+            check_errors_count(app)
+            app.errors_count += 1
             return ""
         else:
             str_num = str(num)
@@ -107,6 +113,8 @@ def get_all_songs_for_artist(app, url) -> dict | None:
             req = requests.get(new_url, headers=headers, allow_redirects=True)
         except:
             logger.error(f"App is get Exception:\n{msg}")
+            check_errors_count(app)
+            app.errors_count += 1
             return
 
     send = BeautifulSoup(req.text, "html.parser")
@@ -116,7 +124,7 @@ def get_all_songs_for_artist(app, url) -> dict | None:
     count = 0
     for i in all_a:
         count += 1
-        song_dict[get_str_for_num(count) + " " + i.text] = i.get("href")
+        song_dict[get_str_for_num(app, count) + " " + i.text] = i.get("href")
     return song_dict
 
 
@@ -155,27 +163,30 @@ def load_artists_from_json():
         logger.error(f"Ошибка доступа к файлу: {msg}")
 
 
+
 def reload_artists_button_press(app):
     if mes_box.askyesnocancel("Обновление списка исполнителей", "Начать обновление списка исполнителей?"):
         reload_artists(app)
 
-def save_main_data_to_json(main_dict):
+def save_main_data_to_json(app, main_dict):
     try:
         with open("main_data.json", "w") as f:
             json.dump(main_dict, f)
         logger.info(f"Файл JSON создан")
     except Exception as msg:
         logger.error(f"App is get Exception (Не могу записать в файл): {msg}")
+        check_errors_count(app)
+        app.errors_count += 1
 
 def reload_artists(app):
     main_dict = {}
-    dict_liters = get_dict_liters_from_main_url(app.my_main_url)  # получаем все литеры с ресурса
+    dict_liters = get_dict_liters_from_main_url(app)  # получаем все литеры с ресурса
                                                                   # в виде словаря {А: link, B: ...}
     if dict_liters:
         dict_liters_len = len(dict_liters)  # вычисляем количество литер
         count = 0
         for ident, link_lit in dict_liters.items():  # проходимся по словарю символов
-            artist_dict = get_all_artists_on_page(link_lit)  # получаем список исполнителей для каждой литеры
+            artist_dict = get_all_artists_on_page(app, link_lit)  # получаем список исполнителей для каждой литеры
             if artist_dict:
                 lit_lib = {}
                 for artist, link_art in artist_dict.items():  # проходимся по списку артистов
@@ -193,13 +204,15 @@ def reload_artists(app):
                 app.my_st_bar.update()
                 # time.sleep(0.5)
 
-        save_main_data_to_json(main_dict)
+        save_main_data_to_json(app, main_dict)
 
         reload_app(app)
         mes_box.showinfo("Информация", "Обновление списка исполнителей завершено")
 
     else:
         logger.error(f"Невозможно получить данные с ресурса: {app.my_main_url}")
+        check_errors_count(app)
+        app.errors_count += 1
 
 def load_data_to_sheets(string_of_characters, frame, app):
 
@@ -255,8 +268,11 @@ def load_data_to_sheets(string_of_characters, frame, app):
                 create_sheet_for_characters(book, i)
     else:
         logger.error("[load_data_to_sheets]: нет строки на входе")
+        check_errors_count(app)
+        app.errors_count += 1
 
 def reload_app(app):
+    save_settings_to_disk(app)
     if app:
         for i in app.pack_slaves():
             i.destroy()
@@ -306,6 +322,8 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
             os.makedirs(dir_name)
     except OSError as msg1: # недопустимая длина пути
         logger.error(f"App is get Exception OSError: {msg1}")
+        check_errors_count(app)
+        app.errors_count += 1
         dir_name = os.path.join(dir, parent, artist.split()[0]) # Обрезаем название исполнителя.
                                                                 # Новое название - первое слово названия
         if not os.path.isdir(dir_name):
@@ -317,6 +335,8 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
                 f.writelines(f"Исходное название исполнителя: {artist}")
         except Exception as msg2:
             logger.error(f"App is get Exception: {msg2}")
+            check_errors_count(app)
+            app.errors_count += 1
     # проверка на длину имени файла
     song_name = clear_file_name(str(song_dict[0]))
     file_name = artist + " - " + song_name
@@ -332,6 +352,8 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
         path = os.path.join(dir_name, file_name + ".txt")
         if len(splitted_name_artist)<2:
             logger.error(f"[СЛИШКОМ ДЛИННОЕ ИМЯ ФАЙЛА] {path}")
+            check_errors_count(app)
+            app.errors_count += 1
             return
 
     # получаем текст песни
@@ -342,6 +364,8 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
         req = requests.get(url_song, headers=headers)
     except Exception as msg3:
         logger.error(f"App is get Exception [Ошибка запроса по адресу песни] {msg3}")
+        check_errors_count(app)
+        app.errors_count += 1
         return
     send = BeautifulSoup(req.text, "html.parser")
 
@@ -362,16 +386,18 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
     except Exception as msg4:
         logger.error(f"App is get Exception [Ошибка записи файла песни]: {msg4}")
         logger.error(f"[DEBUG] {work_dir + path}")
-        return
+        check_errors_count(app)
+        app.errors_count += 1
 
 
-def load_saved_data_from_json():
+def load_saved_data_from_json(app):
     try:
         with open("saved_data.json", "r") as f:
             return json.load(f)
     except FileNotFoundError as msg:
         logger.error(f"App is get Exception [Ошибка чтения файла saved_data.json]: {msg}")
-        return
+        check_errors_count(app)
+        app.errors_count += 1
 
 
 def load_settings_from_json():
@@ -391,13 +417,17 @@ def update_saved_data_file(app):
             json.dump(list(app.saved_data), f)
     except Exception as msg:
         logger.error(f"App is get Exception [Ошибка записи в файл saved_data.json]: {msg}")
+        check_errors_count(app)
+        app.errors_count += 1
 
-def save_settings_to_json(data):
+def save_settings_to_json(app, data):
     try:
         with open("settings.json", "w") as f:
             json.dump(data, f)
     except Exception as msg:
         logger.error(f"App is get Exception [Ошибка записи файла settings.json]: {msg}")
+        check_errors_count(app)
+        app.errors_count += 1
 
 
 # def errors_count_
@@ -454,6 +484,8 @@ def download_songs(app, dir):
         mes_box.showinfo("Информация", "Загрузка песен завершена")
     else:
         logger.error("ОЧЕРЕДЬ ЗАГРУЗКИ ПУСТА!")
+        check_errors_count(app)
+        app.errors_count += 1
 
 
 def download_all_data_button_press(app):
@@ -506,9 +538,10 @@ def save_settings_to_disk(app):
     # data = load_settings_from_json()
     data["delay"] = app.my_delay
     data["main_url"] = app.my_main_url
-    save_settings_to_json(data)
+    data["errors-last-session"] = app.errors_count
+    save_settings_to_json(app, data)
 
-def check_url(url):
+def check_url(app, url):
     # проверка существования адреса
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
@@ -516,6 +549,8 @@ def check_url(url):
         requests.get(url, headers=headers)
     except Exception as msg:
         logger.error(f"App is get Exception [Ошибка запроса при проверке URL]: {msg}")
+        check_errors_count(app)
+        app.errors_count += 1
         return
     return url
 def save_settings_button_press(app, set_top, entry_url, entry_delay):
@@ -530,7 +565,7 @@ def save_settings_button_press(app, set_top, entry_url, entry_delay):
             result = None
         return result
 
-    result_check_url = check_url(entry_url.get())
+    result_check_url = check_url(app, entry_url.get())
     result_check_delay = check_delay(entry_delay.get())
 
     if result_check_url and not result_check_delay is None:
@@ -584,11 +619,10 @@ def change_url(app, settings_window, new_url):
         new_main_data[lit] = new_lit_list
 
     # dump main_data
-    save_main_data_to_json(new_main_data)
+    save_main_data_to_json(app, new_main_data)
 
-    # dump main_url
+    # change main_url
     app.my_main_url = new_url
-    save_settings_to_disk(app)
 
     # reload app
     settings_window.destroy()
@@ -596,7 +630,7 @@ def change_url(app, settings_window, new_url):
 
 def change_url_button_press(app, entry, settings_window):
     entry_value = entry.get()
-    if check_url(entry_value):
+    if check_url(app, entry_value):
         change_url(app, settings_window, entry_value)
     else:
         mes_box.showinfo("Внимание!", "Новый URL адрес недоступен. Операция отменена")
@@ -634,7 +668,7 @@ def init_widgets_toplevel(settings_window, app):
 
     # Панель замены url в БД
     frame3 = ttk_bs.LabelFrame(settings_window, text=" Замена URL в базе данных ")
-    frame3.pack(expand=True, fill="both", pady=10)
+    frame3.pack(expand=True, fill="both", pady =10)
     entry_new_url = ttk_bs.Entry(frame3, width=30)
     update_url_btn = ttk_bs.Button(frame3, text="Подменить URL в БД на:", width=25, padding=5,
                                    command=lambda: change_url_button_press(app, entry_new_url, settings_window))
@@ -659,12 +693,31 @@ def settings_button_press(app:ttk_bs.Window):
         set_top.geometry(f'+{xpos}+{ypos}')
         # set_top.attributes("-topmost", True)
 
-def exec_dir_errors(event):
+def exec_dir_errors(event, app):
     try:
         path = os.getcwd() + "/logs/errors/"
         os.startfile(path)
     except Exception as msg:
         logger.error("App is get Exception: [Ошибка открытия директории] ", msg)
+        check_errors_count(app)
+        app.errors_count += 1
+
+
+def check_url_button_press(app):
+    if check_url(app, app.my_main_url):
+        mes_box.showinfo("Проверка связи", "Связь с порталом установлена успешно.")
+    else:
+        mes_box.showerror("Ошибка!",
+                          "Связь с порталом не установлена!\nНеобходимо поменять главный URL в настройках программы")
+
+
+def check_errors_count(app):
+    if app.errors_count:
+        app.errors_count_label.configure(text=f"[Ошибок: {app.errors_count+1}]")
+    else:
+        app.errors_count_label.pack(side="right")
+        app.errors_count_label.bind("<ButtonPress>", lambda: exec_dir_errors(app))
+
 
 def init_widgets(app):
     # if not logger.id_error:
@@ -705,11 +758,17 @@ def init_widgets(app):
                          )
     btn3.pack(side="left", padx=5, pady=5)
 
-    btn3 = ttk_bs.Button(up_frame,
+    btn4 = ttk_bs.Button(up_frame,
+                         text="Проверить связь в порталом",
+                         command=lambda: check_url_button_press(app)
+                         )
+    btn4.pack(side="left", padx=5, pady=5)
+
+    btn10 = ttk_bs.Button(up_frame,
                          text="Настройки",
                          command=lambda: settings_button_press(app)
                         )
-    btn3.pack(side="right", padx=5, pady=5)
+    btn10.pack(side="right", padx=5, pady=5)
 
     ch_but = ttk_bs.Checkbutton(up_frame,
                                 text="Перезапись исполнителей",
@@ -748,9 +807,10 @@ def init_widgets(app):
     app.my_pr_bar.pack(side="right", padx=5)
     app.percent_label = ttk_bs.Label(status_bar, text="[  0%]", borderwidth=10, foreground="white")
     app.percent_label.pack(side="right")
-    app.errors_count = ttk_bs.Label(status_bar, text="[Ошибок: 0]", borderwidth=10, foreground="red", cursor="hand2")
-    app.errors_count.pack(side="right")
-    app.errors_count.bind("<ButtonPress>", exec_dir_errors)
+    app.errors_count_label = ttk_bs.Label(status_bar, text="[Ошибок: 1]",borderwidth=10, foreground="red", cursor="hand2")
+
+
+
 
 def destroy_app(app):
     if app.queue_on_download:  # Срабатывает, если в очереди есть хотя бы один исполнитель
@@ -759,6 +819,7 @@ def destroy_app(app):
         if res is True:  # Пользователь нажал "Да"
             app.destroy_flag = True
             download_songs(app, dir="DataLib")
+    save_settings_to_disk(app)
     app.destroy()
     logger.info("Приложение ЗАКРЫТО")
 def first_start(app):
@@ -789,7 +850,7 @@ def first_start(app):
     ask(app)
 
 
-def init_app(main_url, main_data, delay):
+def init_app(main_url, main_data, delay, err_last_session):
     app = ttk_bs.Window(themename="superhero")
     app.my_main_url = main_url
     app.my_main_data = main_data
@@ -797,8 +858,9 @@ def init_app(main_url, main_data, delay):
     app.resave_data_option = ttk_bs.IntVar(value=0)
     app.my_delay = delay  # Задержка при цикличном обращении к сайту
     app.queue_on_download = {}
+    app.errors_count = 0
     try:
-        app.saved_data = set(load_saved_data_from_json())
+        app.saved_data = set(load_saved_data_from_json(app))
     except:
         app.saved_data = set()
 
@@ -811,6 +873,11 @@ def init_app(main_url, main_data, delay):
         first_start(app)
     else:
         init_widgets(app)
+
+    if err_last_session:
+        text = f"Предыдущая сессия была завершена с ошибками. \nКоличество ошибок: {err_last_session}. Хотите посмотреть ошибки?"
+        if mes_box.askyesno("Внимание!", text):
+            exec_dir_errors(None, app)
 
     app.mainloop()
 
@@ -826,8 +893,10 @@ def main():
     if settings:
         delay = settings["delay"]
         main_url = settings["main_url"]
+        err_last_sesson = settings["errors-last-session"]
     main_data = load_artists_from_json()
-    init_app(main_url, main_data, delay)
+    if main_data:
+        init_app(main_url, main_data, delay, err_last_sesson)
 
 
 if __name__ == "__main__":
