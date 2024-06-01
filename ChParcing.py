@@ -2,6 +2,8 @@
 
 import json
 import time
+import tkinter.ttk
+import pyautogui
 
 from log import logger, level_filter
 from time import sleep
@@ -214,9 +216,22 @@ def reload_artists(app):
         check_errors_count(app)
         app.errors_count += 1
 
+
+def notebook_tab_changed(event, book):
+    pyautogui.moveTo(event.x_root, event.y_root)
+    pyautogui.click()
+    book.update()
+    name = book.tab(book.select())["text"]
+    if name[-1] == "*":
+        name = name[:-2]
+    else:
+        name += " *"
+    book.tab(book.select(), text=name)
+
+
 def load_data_to_sheets(string_of_characters, frame, app):
 
-    def create_sheet_for_characters(book, txt):
+    def create_sheet_for_characters(book: tkinter.ttk.Notebook, txt):
         temp_frame = ttk_bs.Frame(book)
         temp_frame.pack(fill=ttk_bs.BOTH, expand=True)
         book.add(temp_frame, text=txt, )
@@ -260,6 +275,8 @@ def load_data_to_sheets(string_of_characters, frame, app):
     if len(string_of_characters) > 0:
         book = ttk_bs.Notebook(frame, bootstyle="dark")
         book.enable_traversal()
+        # book.bind("<<NotebookTabChanged>>", lambda event: notebook_tab_changed(event, app))
+        book.bind("<Button-3>", lambda event, book=book: notebook_tab_changed(event, book))
         book.pack(expand=True, fill=ttk_bs.BOTH)
         if string_of_characters == "0..9":
             create_sheet_for_characters(book, string_of_characters)
@@ -809,6 +826,10 @@ def init_widgets(app):
     app.percent_label.pack(side="right")
     app.errors_count_label = ttk_bs.Label(status_bar, text="[Ошибок: 1]",borderwidth=10, foreground="red", cursor="hand2")
 
+    if app.err_last_session:
+        text = f"Предыдущая сессия была завершена с ошибками. \nКоличество ошибок: {app.err_last_session}. Хотите посмотреть ошибки?"
+        if mes_box.askyesno("Внимание!", text):
+            exec_dir_errors(None, app)
 
 
 
@@ -820,6 +841,7 @@ def destroy_app(app):
             app.destroy_flag = True
             download_songs(app, dir="DataLib")
     save_settings_to_disk(app)
+    # app.quit()
     app.destroy()
     logger.info("Приложение ЗАКРЫТО")
 def first_start(app):
@@ -859,6 +881,7 @@ def init_app(main_url, main_data, delay, err_last_session):
     app.my_delay = delay  # Задержка при цикличном обращении к сайту
     app.queue_on_download = {}
     app.errors_count = 0
+    app.err_last_session = err_last_session
     try:
         app.saved_data = set(load_saved_data_from_json(app))
     except:
@@ -874,10 +897,6 @@ def init_app(main_url, main_data, delay, err_last_session):
     else:
         init_widgets(app)
 
-    if err_last_session:
-        text = f"Предыдущая сессия была завершена с ошибками. \nКоличество ошибок: {err_last_session}. Хотите посмотреть ошибки?"
-        if mes_box.askyesno("Внимание!", text):
-            exec_dir_errors(None, app)
 
     app.mainloop()
 
