@@ -214,10 +214,12 @@ def reload_artists(app):
                 app.my_pr_bar.update()
                 app.my_st_bar.configure(text=f'[ОБНОВЛЕНИЕ СПИСКА ИСПОЛНИТЕЛЕЙ] Обновление "{ident}\"')
                 app.my_st_bar.update()
+                app.title(f"[{v:2}%]" + app.window_title)
                 # time.sleep(0.5)
 
         save_main_data_to_json(app, main_dict)
 
+        app.title(app.window_title)
         reload_app(app)
         mes_box.showinfo("Информация", "Обновление списка исполнителей завершено")
 
@@ -484,6 +486,7 @@ def download_songs(app, dir):
             app.my_pr_bar.configure(value=50)
             app.percent_label.configure(text="[ 50%]")
             app.my_pr_bar.update()
+            app.title("[50%]" + app.window_title)
         count = 0
         black_list = []
         for artist, artist_list in app.queue_on_download.items():         # ПРОХОДИМ ПО ИСПОЛНИТЕЛЯМ
@@ -506,6 +509,7 @@ def download_songs(app, dir):
             app.my_pr_bar.configure(value=v)
             app.percent_label.configure(text=f"[{v:3}%]")
             app.my_pr_bar.update()
+            app.title(f"[{v:2}%]" + app.window_title)
 
         for artist in black_list:
             app.queue_on_download.pop(artist) # исключаем чёрный список из окончательной очереди
@@ -514,10 +518,11 @@ def download_songs(app, dir):
         update_saved_data_file(app)
         app.queue_on_download.clear()
         # Обновляем окно, если пользователь не закрывает приложение
-        if not app.destroy_flag:
-            reload_app(app)
         logger.info(f"ЗАГРУЗКА ОЧЕРЕДИ ЗАВЕРШЕНА")
         mes_box.showinfo("Информация", "Загрузка песен завершена")
+        app.title(app.window_title)
+        if not app.destroy_flag:
+            reload_app(app)
     else:
         logger.error("ОЧЕРЕДЬ ЗАГРУЗКИ ПУСТА!")
         check_errors_count(app)
@@ -896,6 +901,7 @@ def first_start(app):
 def init_app(main_data):
     DELAY = 0.1
     MAIN_URL = "https://amdm.ru"
+    WINDOW_TITLE = "Chords Parcing"
 
     app = ttk_bs.Window(themename="superhero")
 
@@ -905,6 +911,7 @@ def init_app(main_data):
     app.resave_data_option = ttk_bs.IntVar(value=0)
     app.queue_on_download = {}
     app.errors_count = 0
+    app.window_title = WINDOW_TITLE
 
     settings = load_settings_from_json()
     if settings:
@@ -922,7 +929,7 @@ def init_app(main_data):
         app.saved_data = set()
 
 
-    app.title("Chords Parcing")
+    app.title(WINDOW_TITLE)
     app.geometry("1000x800")
     app.protocol("WM_DELETE_WINDOW", lambda: destroy_app(app))
 
