@@ -68,14 +68,17 @@ def get_all_songs_for_artist(app, url) -> dict | None:
     возвращает словарь {"Песня":"Ссылка", ...} для всех песен
     """
 
-    def parse_error(msg):
+    def parse_error(app, msg):
         """
         Функция извлекает из текста ошибки новый URL страницы исполнителя
         :param msg: объект текста ошибки исключения
         :return:str
         """
         msg = str(msg)
-        start = msg.find("/")
+        shift = 0
+        if app.my_main_url[-1] == "/":
+            shift = 1
+        start = msg.find("/") + shift
         end = msg.rfind("/", start) + 1
         return msg[start:end]
 
@@ -110,7 +113,8 @@ def get_all_songs_for_artist(app, url) -> dict | None:
     try:
         req = requests.get(url, headers=headers, allow_redirects=True)
     except Exception as msg:
-        new_url = app.my_main_url + parse_error(msg)
+        new_url = app.my_main_url + parse_error(app, msg)
+        print(new_url)
         try:
             req = requests.get(new_url, headers=headers, allow_redirects=True)
         except:
@@ -121,13 +125,19 @@ def get_all_songs_for_artist(app, url) -> dict | None:
 
     send = BeautifulSoup(req.text, "html.parser")
     table = send.find("table", id="tablesort")
-    all_a = table.find_all("a")
-    song_dict = {}
-    count = 0
-    for i in all_a:
-        count += 1
-        song_dict[get_str_for_num(app, count) + " " + i.text] = i.get("href")
-    return song_dict
+    if table:
+        all_a = table.find_all("a")
+        song_dict = {}
+        count = 0
+        for i in all_a:
+            count += 1
+            song_dict[get_str_for_num(app, count) + " " + i.text] = i.get("href")
+        return song_dict
+    else:
+        logger.error("Ошибка содержимого на странице исполнителя. Список песен не найден")
+        check_errors_count(app)
+        app.errors_count += 1
+        return
 
 
 def item_selected(event, tree, app):
@@ -217,16 +227,19 @@ def reload_artists(app):
         app.errors_count += 1
 
 
-def notebook_tab_changed(event, book):
+def notebook_tab_changed(event, book, app):
     pyautogui.moveTo(event.x_root, event.y_root)
     pyautogui.click()
     book.update()
     name = book.tab(book.select())["text"]
     if name[-1] == "*":
         name = name[:-2]
+        app.completed_chars.discard(name)
     else:
         name += " *"
+        app.completed_chars.add(name[:-2])
     book.tab(book.select(), text=name)
+    # print(app.completed_chars)
 
 
 def load_data_to_sheets(string_of_characters, frame, app):
@@ -234,7 +247,13 @@ def load_data_to_sheets(string_of_characters, frame, app):
     def create_sheet_for_characters(book: tkinter.ttk.Notebook, txt):
         temp_frame = ttk_bs.Frame(book)
         temp_frame.pack(fill=ttk_bs.BOTH, expand=True)
-        book.add(temp_frame, text=txt, )
+
+        if txt in app.completed_chars:
+            sheet_name = txt + " *"
+        else:
+            sheet_name = txt
+
+        book.add(temp_frame, text=sheet_name)
         tree = ttk_bs.Treeview(temp_frame,
                             columns=("name", "check", "in_db", "link", "parent"),
                             displaycolumns=("name", "check", "in_db", "link"),
@@ -276,7 +295,7 @@ def load_data_to_sheets(string_of_characters, frame, app):
         book = ttk_bs.Notebook(frame, bootstyle="dark")
         book.enable_traversal()
         # book.bind("<<NotebookTabChanged>>", lambda event: notebook_tab_changed(event, app))
-        book.bind("<Button-3>", lambda event, book=book: notebook_tab_changed(event, book))
+        book.bind("<Button-3>", lambda event, book=book: notebook_tab_changed(event, book, app))
         book.pack(expand=True, fill=ttk_bs.BOTH)
         if string_of_characters == "0..9":
             create_sheet_for_characters(book, string_of_characters)
@@ -556,6 +575,7 @@ def save_settings_to_disk(app):
     data["delay"] = app.my_delay
     data["main_url"] = app.my_main_url
     data["errors-last-session"] = app.errors_count
+    data["completed_chars"] = list(app.completed_chars)
     save_settings_to_json(app, data)
 
 def check_url(app, url):
@@ -651,7 +671,8 @@ def change_url_button_press(app, entry, settings_window):
         change_url(app, settings_window, entry_value)
     else:
         mes_box.showinfo("Внимание!", "Новый URL адрес недоступен. Операция отменена")
-        settings_window.focus_set()
+        if settings_window:
+            settings_window.focus_set()
 
 
 
@@ -733,7 +754,7 @@ def check_errors_count(app):
         app.errors_count_label.configure(text=f"[Ошибок: {app.errors_count+1}]")
     else:
         app.errors_count_label.pack(side="right")
-        app.errors_count_label.bind("<ButtonPress>", lambda: exec_dir_errors(app))
+        app.errors_count_label.bind("<ButtonPress>", lambda event: exec_dir_errors(event, app))
 
 
 def init_widgets(app):
@@ -872,16 +893,29 @@ def first_start(app):
     ask(app)
 
 
-def init_app(main_url, main_data, delay, err_last_session):
+def init_app(main_data):
+    DELAY = 0.1
+    MAIN_URL = "https://amdm.ru"
+
     app = ttk_bs.Window(themename="superhero")
-    app.my_main_url = main_url
+
+    app.completed_chars = set()
     app.my_main_data = main_data
     app.destroy_flag = False
     app.resave_data_option = ttk_bs.IntVar(value=0)
-    app.my_delay = delay  # Задержка при цикличном обращении к сайту
     app.queue_on_download = {}
     app.errors_count = 0
-    app.err_last_session = err_last_session
+
+    settings = load_settings_from_json()
+    if settings:
+        app.my_delay = settings["delay"] # Задержка при цикличном обращении к сайту
+        app.my_main_url = settings["main_url"]
+        app.err_last_session = settings["errors-last-session"]
+        app.completed_chars = set(settings["completed_chars"])
+    else:
+        app.my_delay = DELAY
+        app.my_main_url = MAIN_URL
+
     try:
         app.saved_data = set(load_saved_data_from_json(app))
     except:
@@ -905,17 +939,10 @@ def main():
     logger.info("Приложение ЗАПУЩЕНО")
     # DEFAULT
 
-    delay = 0.1
-    main_url = "https://amdm.ru"
 
-    settings = load_settings_from_json()
-    if settings:
-        delay = settings["delay"]
-        main_url = settings["main_url"]
-        err_last_sesson = settings["errors-last-session"]
     main_data = load_artists_from_json()
     if main_data:
-        init_app(main_url, main_data, delay, err_last_sesson)
+        init_app(main_data)
 
 
 if __name__ == "__main__":
