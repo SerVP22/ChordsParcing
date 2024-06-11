@@ -1,11 +1,10 @@
 # python 3.10
 
 import json
-import time
+import sys
 import tkinter.ttk
 import pyautogui
-
-from log import logger, level_filter
+from loguru import logger
 from time import sleep
 from datetime import datetime
 
@@ -477,6 +476,7 @@ def download_songs(app, dir):
     #     data["last_artist"] = artist
     #     save_settings_to_json(data)
 
+    save_settings_to_disk(app)
 
     queue_len = len(app.queue_on_download)
     if queue_len:
@@ -519,6 +519,7 @@ def download_songs(app, dir):
         app.queue_on_download.clear()
         # Обновляем окно, если пользователь не закрывает приложение
         logger.info(f"ЗАГРУЗКА ОЧЕРЕДИ ЗАВЕРШЕНА")
+        logger.info(f"ТЕКУЩАЯ СЕССИЯ ЛОГИРОВАНИЯ ЗАВЕРШЕНА")
         mes_box.showinfo("Информация", "Загрузка песен завершена")
         app.title(app.window_title)
         if not app.destroy_flag:
@@ -763,6 +764,33 @@ def check_errors_count(app):
 
 
 def init_widgets(app):
+    def level_filter(level):
+        def is_level(record):
+            return record["level"].name == level
+
+        return is_level
+
+    logger.remove()
+
+    logger.add(sys.stdout)
+
+    logger.add("logs/info/info_{time}.log",
+               format="{time} | {level} | {message}",
+               filter=level_filter(level="INFO"),
+               # rotation="callable"
+               )
+    logger.add("logs/errors/errors_{time}.log",
+               format="{time} | {level} | {message}",
+               filter=level_filter(level="ERROR"))
+
+
+
+
+
+
+    logger.info("Приложение ЗАПУЩЕНО")
+    # DEFAULT
+
     # if not logger.id_error:
     #     logger.remove(1)
     #     logger.add("logs/errors/errors_{time}.log",
@@ -943,8 +971,7 @@ def init_app(main_data):
 
 
 def main():
-    logger.info("Приложение ЗАПУЩЕНО")
-    # DEFAULT
+
 
 
     main_data = load_artists_from_json()
