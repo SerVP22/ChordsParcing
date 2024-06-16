@@ -1,168 +1,32 @@
 # python 3.10
 
-import json
-import sys
-import tkinter.ttk
-import pyautogui
-from loguru import logger
+import json, os
+
+
+# from Net import get_song_text, get_all_songs_for_artist, check_url, get_dict_liters_from_main_url, \
+#     get_all_artists_on_page
+#
+# from AppGUI import logger, init_app, init_widgets
+
+from Net import *
+from AppGUI import *
+
+
 from time import sleep
 from datetime import datetime
-
-from bs4 import BeautifulSoup
-import requests
-import os
-import ttkbootstrap as ttk_bs # Современная надстройка над ttk и tkinter
 from tkinter import messagebox as mes_box
+
+
 # from PIL import Image, ImageTk
 
 
-def get_dict_liters_from_main_url(app):
-    """
-
-    возвращает словарь {"Символ":"Ссылка", ...} для всех символов на главной странице ресурса
-    """
-    url = app.my_main_url
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
-                                AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-        req = requests.get(url, headers=headers)
-        logger.info(f"App is get response: {req}")
-        send = BeautifulSoup(req.text, "html.parser")
-        div = send.find_all("div", class_="alphabet g-margin")
-
-        bs_div = BeautifulSoup(str(div), "html.parser")
-        search = bs_div.find_all("a")
-        dict_liters = {i.text: url + i.get("href") for i in search}
-        return dict_liters
-    except Exception as msg:
-        logger.error(f"App is get Exception: {msg}")
-        check_errors_count(app)
-        app.errors_count +=1
-
-
-def get_all_artists_on_page(app, url):
-    """
-    url: ссылка на страницу со списком исполнителей
-    возвращает словарь {"Исполнитель":"Ссылка", ...} для всех исполнителей на странице
-    """
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
-                    AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-        req = requests.get(url, headers=headers)
-        send = BeautifulSoup(req.text, "html.parser")
-        all_a = send.find_all("a", class_="artist")
-        artists_dict = {}
-        for i in all_a:
-            artists_dict[i.text] = i.get("href")
-        return artists_dict
-    except Exception as msg:
-        logger.error(f"App is get Exception: {msg}")
-        check_errors_count(app)
-        app.errors_count += 1
-
-
-def get_all_songs_for_artist(app, url) -> dict | None:
-    """
-    url: ссылка на страницу исполнителя
-    возвращает словарь {"Песня":"Ссылка", ...} для всех песен
-    """
-
-    def parse_error(app, msg):
-        """
-        Функция извлекает из текста ошибки новый URL страницы исполнителя
-        :param msg: объект текста ошибки исключения
-        :return:str
-        """
-        msg = str(msg)
-        shift = 0
-        if app.my_main_url[-1] == "/":
-            shift = 1
-        start = msg.find("/") + shift
-        end = msg.rfind("/", start) + 1
-        return msg[start:end]
-
-    def get_str_for_num(app, num):
-        """
-        Добавляет в название песни нули к номеру песни по порядку ( 1 -> 0001 )
-
-        :param num: int
-        :return: str
-        """
-        if num > 9999:
-            logger.error(f"Превышено количество песен для директории")
-            check_errors_count(app)
-            app.errors_count += 1
-            return ""
-        else:
-            str_num = str(num)
-            if len(str_num) == 4:
-                return str_num
-            elif len(str_num) == 3:
-                return "0" + str_num
-            elif len(str_num) == 2:
-                return "00" + str_num
-            else:
-                return "000" + str_num
-
-    # url = check_url_and_main_url(app, url)
-
-    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
-                        AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-
-    try:
-        req = requests.get(url, headers=headers, allow_redirects=True)
-    except Exception as msg:
-        new_url = app.my_main_url + parse_error(app, msg)
-        print(new_url)
-        try:
-            req = requests.get(new_url, headers=headers, allow_redirects=True)
-        except:
-            logger.error(f"App is get Exception:\n{msg}")
-            check_errors_count(app)
-            app.errors_count += 1
-            return
-
-    send = BeautifulSoup(req.text, "html.parser")
-    table = send.find("table", id="tablesort")
-    if table:
-        all_a = table.find_all("a")
-        song_dict = {}
-        count = 0
-        for i in all_a:
-            count += 1
-            song_dict[get_str_for_num(app, count) + " " + i.text] = i.get("href")
-        return song_dict
-    else:
-        logger.error("Ошибка содержимого на странице исполнителя. Список песен не найден")
-        check_errors_count(app)
-        app.errors_count += 1
-        return
-
-
-def item_selected(event, tree, app):
-
-    def invert_item_state():
-        if stat_queue == "-":
-            val = "В очереди"
-            app.queue_on_download[artist] = (link, parent)
-            logger.info(f"Исполнитель \"{artist}\" добавлен в очередь скачивания")
-        else:
-            val = "-"
-            if artist in app.queue_on_download.keys():
-                app.queue_on_download.pop(artist)
-                logger.info(f"Исполнитель \"{artist}\" удалён из очереди скачивания")
-        tree.set(tree.selection(), column="#2", value=val)
-
-
-    # Получаем значения из таблицы
-    artist, stat_queue, _, link, parent = tree.item(tree.selection(), option="values")
-
-    if artist != "Нет исполнителей":
-        if app.resave_data_option.get() == 0:          # Если отключена опция "Перезапись данных",
-            if artist not in app.saved_data:    # то проверяем наличие исполнителя в списке загруженных
-                invert_item_state()
-        elif app.resave_data_option.get() == 1:
-            invert_item_state()
+def reload_app(app):
+    save_settings_to_disk(app)
+    if app:
+        for i in app.pack_slaves():
+            i.destroy()
+        app.my_main_data = load_artists_from_json()
+        init_widgets(app)
 
 
 def load_artists_from_json():
@@ -174,11 +38,6 @@ def load_artists_from_json():
         logger.error(f"Ошибка доступа к файлу: {msg}")
 
 
-
-def reload_artists_button_press(app):
-    if mes_box.askyesnocancel("Обновление списка исполнителей", "Начать обновление списка исполнителей?"):
-        reload_artists(app)
-
 def save_main_data_to_json(app, main_dict):
     try:
         with open("main_data.json", "w") as f:
@@ -188,133 +47,6 @@ def save_main_data_to_json(app, main_dict):
         logger.error(f"App is get Exception (Не могу записать в файл): {msg}")
         check_errors_count(app)
         app.errors_count += 1
-
-def reload_artists(app):
-    main_dict = {}
-    dict_liters = get_dict_liters_from_main_url(app)  # получаем все литеры с ресурса
-                                                                  # в виде словаря {А: link, B: ...}
-    if dict_liters:
-        dict_liters_len = len(dict_liters)  # вычисляем количество литер
-        count = 0
-        for ident, link_lit in dict_liters.items():  # проходимся по словарю символов
-            artist_dict = get_all_artists_on_page(app, link_lit)  # получаем список исполнителей для каждой литеры
-            if artist_dict:
-                lit_lib = {}
-                for artist, link_art in artist_dict.items():  # проходимся по списку артистов
-                    lit_lib[artist] = [link_art, ident]
-                    # {artist1: [link_art1, parent], artist2: [...], ...}
-                main_dict[ident] = [link_lit, lit_lib]
-                # {A:[link, {artist1: [False, link_art1], artist2: [False, link_art2], ...}], B:[...], ... }
-                del lit_lib
-                count += 1
-                v = int(count / dict_liters_len * 100)
-                app.my_pr_bar.configure(value=v)
-                app.percent_label.configure(text=f"[{v:3}%]")
-                app.my_pr_bar.update()
-                app.my_st_bar.configure(text=f'[ОБНОВЛЕНИЕ СПИСКА ИСПОЛНИТЕЛЕЙ] Обновление "{ident}\"')
-                app.my_st_bar.update()
-                app.title(f"[{v:2}%]" + app.window_title)
-                # time.sleep(0.5)
-
-        save_main_data_to_json(app, main_dict)
-
-        app.title(app.window_title)
-        reload_app(app)
-        mes_box.showinfo("Информация", "Обновление списка исполнителей завершено")
-
-    else:
-        logger.error(f"Невозможно получить данные с ресурса: {app.my_main_url}")
-        check_errors_count(app)
-        app.errors_count += 1
-
-
-def notebook_tab_changed(event, book, app):
-    pyautogui.moveTo(event.x_root, event.y_root)
-    pyautogui.click()
-    book.update()
-    name = book.tab(book.select())["text"]
-    if name[-1] == "*":
-        name = name[:-2]
-        app.completed_chars.discard(name)
-    else:
-        name += " *"
-        app.completed_chars.add(name[:-2])
-    book.tab(book.select(), text=name)
-    # print(app.completed_chars)
-
-
-def load_data_to_sheets(string_of_characters, frame, app):
-
-    def create_sheet_for_characters(book: tkinter.ttk.Notebook, txt):
-        temp_frame = ttk_bs.Frame(book)
-        temp_frame.pack(fill=ttk_bs.BOTH, expand=True)
-
-        if txt in app.completed_chars:
-            sheet_name = txt + " *"
-        else:
-            sheet_name = txt
-
-        book.add(temp_frame, text=sheet_name)
-        tree = ttk_bs.Treeview(temp_frame,
-                            columns=("name", "check", "in_db", "link", "parent"),
-                            displaycolumns=("name", "check", "in_db", "link"),
-                            show="headings",
-                            selectmode=ttk_bs.BROWSE
-                            # image=img
-                            )
-        tree.heading("name", text="Исполнитель", anchor=ttk_bs.W)
-        tree.heading("check", text="Добавить", anchor=ttk_bs.W)
-        tree.heading("in_db", text="В базе", anchor=ttk_bs.W)
-        tree.heading("link", text="Ссылка", anchor=ttk_bs.W)
-        tree.heading("parent", text="Родитель", anchor=ttk_bs.W)
-        tree.column("#1", stretch=ttk_bs.NO, width=200)
-        tree.column("#2", stretch=ttk_bs.NO, width=100)
-        tree.column("#3", stretch=ttk_bs.NO, width=70)
-        tree.column("#4", stretch=ttk_bs.NO, width=400)
-
-        try:
-            for art in app.my_main_data[txt][1]:
-                tree.insert("", ttk_bs.END, values=(art,
-                                                "-",
-                                                "Загружен" if art in app.saved_data else "--",
-                                                app.my_main_data[txt][1][art][0], # ссылка
-                                                app.my_main_data[txt][1][art][1]  # родитель
-                                                )
-                            )
-        except Exception as msg:
-            tree.insert("", ttk_bs.END, values=("Нет исполнителей", "", "", "", ""))
-            logger.info(f"Загрузка локальных данных. Нет данных для: {msg}")
-
-        scroll = ttk_bs.Scrollbar(temp_frame, command=tree.yview)
-        tree.configure(yscrollcommand=scroll.set)
-        scroll.pack(side=ttk_bs.RIGHT, fill=ttk_bs.Y)
-        tree.pack(expand=True, fill=ttk_bs.BOTH)
-        tree.bind("<<TreeviewSelect>>", lambda event: item_selected(event, tree, app))
-        book.update()
-
-    if len(string_of_characters) > 0:
-        book = ttk_bs.Notebook(frame, bootstyle="dark")
-        book.enable_traversal()
-        # book.bind("<<NotebookTabChanged>>", lambda event: notebook_tab_changed(event, app))
-        book.bind("<Button-3>", lambda event, book=book: notebook_tab_changed(event, book, app))
-        book.pack(expand=True, fill=ttk_bs.BOTH)
-        if string_of_characters == "0..9":
-            create_sheet_for_characters(book, string_of_characters)
-        else:
-            for i in string_of_characters:
-                create_sheet_for_characters(book, i)
-    else:
-        logger.error("[load_data_to_sheets]: нет строки на входе")
-        check_errors_count(app)
-        app.errors_count += 1
-
-def reload_app(app):
-    save_settings_to_disk(app)
-    if app:
-        for i in app.pack_slaves():
-            i.destroy()
-        app.my_main_data = load_artists_from_json()
-        init_widgets(app)
 
 
 def clear_file_name(file_name: str) -> str:
@@ -394,17 +126,7 @@ def save_song_on_disk(app, art: str, song_dict: tuple, parent: str, dir: str) ->
             return
 
     # получаем текст песни
-    url_song = song_dict[1]  # check_url_and_main_url(app, song_dict[1])
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
-                    AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-        req = requests.get(url_song, headers=headers)
-    except Exception as msg3:
-        logger.error(f"App is get Exception [Ошибка запроса по адресу песни] {msg3}")
-        check_errors_count(app)
-        app.errors_count += 1
-        return
-    send = BeautifulSoup(req.text, "html.parser")
+    send = get_song_text(app, song_dict)
 
     # пишем текст песни в файл
     try:
@@ -448,6 +170,7 @@ def load_settings_from_json():
         logger.error(f"App is get Exception [Нет данных из файла settings.json]: {msg}")
         return {}
 
+
 def update_saved_data_file(app):
     try:
         with open("saved_data.json", "w") as f:
@@ -456,6 +179,7 @@ def update_saved_data_file(app):
         logger.error(f"App is get Exception [Ошибка записи в файл saved_data.json]: {msg}")
         check_errors_count(app)
         app.errors_count += 1
+
 
 def save_settings_to_json(app, data):
     try:
@@ -467,14 +191,7 @@ def save_settings_to_json(app, data):
         app.errors_count += 1
 
 
-# def errors_count_
-
 def download_songs(app, dir):
-
-    # def save_last_artist(artist):
-    #     data = load_settings_from_json()
-    #     data["last_artist"] = artist
-    #     save_settings_to_json(data)
 
     save_settings_to_disk(app)
 
@@ -530,15 +247,10 @@ def download_songs(app, dir):
         app.errors_count += 1
 
 
-def download_all_data_button_press(app):
-    if mes_box.askyesnocancel("Загрузка всего архива песен",
-                              "Загрузка всего архива песен занимает продолжительное время. Продолжить операцию?"):
-        download_all_data(app)
-
-
 def check_artist_in_base(download_dir, parent, artist):
     artist_path = os.path.join(download_dir, parent, artist)
     return True if os.path.isdir(artist_path) else False
+
 
 def download_all_data(app):
 
@@ -546,12 +258,12 @@ def download_all_data(app):
         queue = {}
         for list_dict_ch in main_data.values():  # [{artist: [url, parent]}, ]
             for artist, (link, parent) in list_dict_ch[1].items():
-                if parent == "К": # ТЕСТ
-                    if app.resave_data_option.get():
+                # if parent == "К": # ТЕСТ
+                if app.resave_data_option.get():
+                    queue[artist] = (link, parent)
+                else:
+                    if not check_artist_in_base(download_dir, parent, artist):
                         queue[artist] = (link, parent)
-                    else:
-                        if not check_artist_in_base(download_dir, parent, artist):
-                            queue[artist] = (link, parent)
                 # print(artist, link, parent)
         return queue
 
@@ -575,6 +287,63 @@ def invert_resave_data(app):
     app.resave_data_option = not app.resave_data_option
 
 
+def reload_artists(app):
+    main_dict = {}
+    dict_liters = get_dict_liters_from_main_url(app)  # получаем все литеры с ресурса
+                                                                  # в виде словаря {А: link, B: ...}
+    if dict_liters:
+        dict_liters_len = len(dict_liters)  # вычисляем количество литер
+        count = 0
+        for ident, link_lit in dict_liters.items():  # проходимся по словарю символов
+            artist_dict = get_all_artists_on_page(app, link_lit)  # получаем список исполнителей для каждой литеры
+            if artist_dict:
+                lit_lib = {}
+                for artist, link_art in artist_dict.items():  # проходимся по списку артистов
+                    lit_lib[artist] = [link_art, ident]
+                    # {artist1: [link_art1, parent], artist2: [...], ...}
+                main_dict[ident] = [link_lit, lit_lib]
+                # {A:[link, {artist1: [False, link_art1], artist2: [False, link_art2], ...}], B:[...], ... }
+                del lit_lib
+                count += 1
+                v = int(count / dict_liters_len * 100)
+                app.my_pr_bar.configure(value=v)
+                app.percent_label.configure(text=f"[{v:3}%]")
+                app.my_pr_bar.update()
+                app.my_st_bar.configure(text=f'[ОБНОВЛЕНИЕ СПИСКА ИСПОЛНИТЕЛЕЙ] Обновление "{ident}\"')
+                app.my_st_bar.update()
+                app.title(f"[{v:2}%]" + app.window_title)
+                # time.sleep(0.5)
+
+        save_main_data_to_json(app, main_dict)
+
+        app.title(app.window_title)
+        reload_app(app)
+        mes_box.showinfo("Информация", "Обновление списка исполнителей завершено")
+
+    else:
+        logger.error(f"Невозможно получить данные с ресурса: {app.my_main_url}")
+        check_errors_count(app)
+        app.errors_count += 1
+
+
+def exec_dir_errors(event, app):
+    try:
+        path = os.getcwd() + "/logs/errors/"
+        os.startfile(path)
+    except Exception as msg:
+        logger.error("App is get Exception: [Ошибка открытия директории] ", msg)
+        check_errors_count(app)
+        app.errors_count += 1
+
+
+def check_errors_count(app):
+    if app.errors_count:
+        app.errors_count_label.configure(text=f"[Ошибок: {app.errors_count+1}]")
+    else:
+        app.errors_count_label.pack(side="right")
+        app.errors_count_label.bind("<ButtonPress>", lambda event: exec_dir_errors(event, app))
+
+
 def save_settings_to_disk(app):
     data = {}
     # data = load_settings_from_json()
@@ -584,18 +353,7 @@ def save_settings_to_disk(app):
     data["completed_chars"] = list(app.completed_chars)
     save_settings_to_json(app, data)
 
-def check_url(app, url):
-    # проверка существования адреса
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) \
-                    AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
-        requests.get(url, headers=headers)
-    except Exception as msg:
-        logger.error(f"App is get Exception [Ошибка запроса при проверке URL]: {msg}")
-        check_errors_count(app)
-        app.errors_count += 1
-        return
-    return url
+
 def save_settings_button_press(app, set_top, entry_url, entry_delay):
 
     def check_delay(delay):
@@ -671,6 +429,7 @@ def change_url(app, settings_window, new_url):
     settings_window.destroy()
     reload_app(app)
 
+
 def change_url_button_press(app, entry, settings_window):
     entry_value = entry.get()
     if check_url(app, entry_value):
@@ -681,299 +440,7 @@ def change_url_button_press(app, entry, settings_window):
             settings_window.focus_set()
 
 
-
-
-def init_widgets_toplevel(settings_window, app):
-
-    frame1 = ttk_bs.LabelFrame(settings_window)
-    frame1.pack(expand=True, fill="both")
-    # Установка URL
-    label_url = ttk_bs.Label(frame1, text="URL главной страницы AmDm.ru:", anchor="e", width=40)
-    label_url.grid(column=0, row=0, columnspan=3, padx=10, pady=10)
-    entry_url = ttk_bs.Entry(frame1, width=30)
-    entry_url.insert(0, str(app.my_main_url))
-    entry_url.grid(column=4, row=0, columnspan=3, padx=10, pady=10)
-
-
-    # Установка задержки при запросах на сервер
-    label_delay = ttk_bs.Label(frame1, text="Задержка при запросах на сервер (сек):", anchor="e", width=40)
-    label_delay.grid(column=0, row=1, columnspan=3, padx=10, pady=10)
-    entry_delay = ttk_bs.Entry(frame1, width=30)
-    entry_delay.insert(0, str(app.my_delay))
-    entry_delay.grid(column=4, row=1, columnspan=3, padx=10, pady=10)
-
-    frame2 = ttk_bs.LabelFrame(settings_window)
-    frame2.pack(expand=True, fill="both")
-    # Кнопка "Сохранить параметры)
-
-    btn_save = ttk_bs.Button(frame2, text="Сохранить параметры", width=25, padding=5,
-                             command=lambda: save_settings_button_press(app, settings_window, entry_url, entry_delay))
-    btn_save.pack(anchor="center", pady=10)
-
-    # Панель замены url в БД
-    frame3 = ttk_bs.LabelFrame(settings_window, text=" Замена URL в базе данных ")
-    frame3.pack(expand=True, fill="both", pady =10)
-    entry_new_url = ttk_bs.Entry(frame3, width=30)
-    update_url_btn = ttk_bs.Button(frame3, text="Подменить URL в БД на:", width=25, padding=5,
-                                   command=lambda: change_url_button_press(app, entry_new_url, settings_window))
-    update_url_btn.grid(column=0, row=0, columnspan=3, padx=50, pady=10)
-    entry_new_url.grid(column=4, row=0, columnspan=3, padx=10, pady=10)
-
-def settings_button_press(app:ttk_bs.Window):
-    if "Toplevel" not in str(app.winfo_children()):
-
-        set_top = ttk_bs.Toplevel(title="Настройки",
-                                  topmost=False,
-                                  resizable=(False,False))
-        init_widgets_toplevel(set_top, app)
-
-        set_top.update_idletasks()
-        t_height = set_top.winfo_height()
-        t_width = set_top.winfo_width()
-        a_height = app.winfo_height()
-        a_width = app.winfo_width()
-        xpos = app.winfo_x() + ((a_width - t_width) // 2)
-        ypos = app.winfo_y() + ((a_height - t_height) // 2)
-        set_top.geometry(f'+{xpos}+{ypos}')
-        # set_top.attributes("-topmost", True)
-
-def exec_dir_errors(event, app):
-    try:
-        path = os.getcwd() + "/logs/errors/"
-        os.startfile(path)
-    except Exception as msg:
-        logger.error("App is get Exception: [Ошибка открытия директории] ", msg)
-        check_errors_count(app)
-        app.errors_count += 1
-
-
-def check_url_button_press(app):
-    if check_url(app, app.my_main_url):
-        mes_box.showinfo("Проверка связи", "Связь с порталом установлена успешно.")
-    else:
-        mes_box.showerror("Ошибка!",
-                          "Связь с порталом не установлена!\nНеобходимо поменять главный URL в настройках программы")
-
-
-def check_errors_count(app):
-    if app.errors_count:
-        app.errors_count_label.configure(text=f"[Ошибок: {app.errors_count+1}]")
-    else:
-        app.errors_count_label.pack(side="right")
-        app.errors_count_label.bind("<ButtonPress>", lambda event: exec_dir_errors(event, app))
-
-
-def init_widgets(app):
-    def level_filter(level):
-        def is_level(record):
-            return record["level"].name == level
-
-        return is_level
-
-    logger.remove()
-
-    logger.add(sys.stdout)
-
-    logger.add("logs/info/info_{time}.log",
-               format="{time} | {level} | {message}",
-               filter=level_filter(level="INFO"),
-               # rotation="callable"
-               )
-    logger.add("logs/errors/errors_{time}.log",
-               format="{time} | {level} | {message}",
-               filter=level_filter(level="ERROR"))
-
-
-
-
-
-
-    logger.info("Приложение ЗАПУЩЕНО")
-    # DEFAULT
-
-    # if not logger.id_error:
-    #     logger.remove(1)
-    #     logger.add("logs/errors/errors_{time}.log",
-    #                format="{time} | {level} | {message}",
-    #                filter=level_filter(level="ERROR"))
-
-    string_1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    string_2 = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
-    string_3 = "0..9"
-    # with Image.open("img/dnld.png") as img_d:
-    #     dnld_img = ImageTk.PhotoImage(image=img_d, size=(16, 16))
-
-
-
-
-    #    ПАНЕЛЬ ОПЦИЙ
-    up_frame = ttk_bs.LabelFrame(app, text="Опции", padding=5)
-    up_frame.pack(fill=ttk_bs.BOTH, expand=False)
-
-    btn2 = ttk_bs.Button(up_frame,
-                         text="Загрузить песни",
-                         # image=dnld_img,
-                         command=lambda: download_songs(app, dir="DataLib")
-                         )
-    btn2.pack(side="left", padx=5, pady=5)
-
-    btn1 = ttk_bs.Button(up_frame,
-                         text="Обновить список артистов",
-                         command=lambda: reload_artists_button_press(app)
-                         )
-    btn1.pack(side="left", padx=5, pady=5)
-
-    btn3 = ttk_bs.Button(up_frame,
-                         text="Скачать весь архив с сайта",
-                         command=lambda: download_all_data_button_press(app)
-                         )
-    btn3.pack(side="left", padx=5, pady=5)
-
-    btn4 = ttk_bs.Button(up_frame,
-                         text="Проверить связь в порталом",
-                         command=lambda: check_url_button_press(app)
-                         )
-    btn4.pack(side="left", padx=5, pady=5)
-
-    btn10 = ttk_bs.Button(up_frame,
-                         text="Настройки",
-                         command=lambda: settings_button_press(app)
-                        )
-    btn10.pack(side="right", padx=5, pady=5)
-
-    ch_but = ttk_bs.Checkbutton(up_frame,
-                                text="Перезапись исполнителей",
-                                variable=app.resave_data_option,
-                                offvalue=0,
-                                onvalue=1
-                                )
-    ch_but.pack(side="right", padx=5, pady=5)
-
-    #     ПАНЕЛЬ НАВИГАЦИИ ПО ИСПОЛНИТЕЛЯМ
-    middle_frame = ttk_bs.LabelFrame(app, text="Исполнители", )
-    middle_frame.pack(fill=ttk_bs.BOTH, expand=True)
-    main_book = ttk_bs.Notebook(middle_frame, padding=5, bootstyle="dark")
-    main_book.pack(expand=True, fill=ttk_bs.BOTH)
-    frame1 = ttk_bs.Frame(main_book)
-    frame2 = ttk_bs.Frame(main_book)
-    frame3 = ttk_bs.Frame(main_book)
-
-    frame2.pack(fill=ttk_bs.BOTH, expand=True)
-    main_book.add(frame2, text="    Русские буквы (А..Я)    ")
-    load_data_to_sheets(string_2, frame2, app)
-    frame1.pack(fill=ttk_bs.BOTH, expand=True)
-    main_book.add(frame1, text="    Английские буквы (A..Z)    ")
-    load_data_to_sheets(string_1, frame1, app)
-    frame3.pack(fill=ttk_bs.BOTH, expand=True)
-    main_book.add(frame3, text="    Цифровые символы (0..9)    ")
-    load_data_to_sheets(string_3, frame3, app)
-
-    #     СТРОКА СОСТОЯНИЯ
-    status_bar_text = "[Выберите исполнителей для скачивания и нажмите кнопку \"Загрузить песни\"]"
-    status_bar = ttk_bs.Frame(app)
-    app.my_st_bar = ttk_bs.Label(status_bar, text=status_bar_text, borderwidth=10, foreground="yellow")
-    status_bar.pack(fill=ttk_bs.BOTH, expand=False, padx=10)
-    app.my_st_bar.pack(side="left")
-    app.my_pr_bar = ttk_bs.Progressbar(status_bar, bootstyle="success-striped", length=200)
-    app.my_pr_bar.pack(side="right", padx=5)
-    app.percent_label = ttk_bs.Label(status_bar, text="[  0%]", borderwidth=10, foreground="white")
-    app.percent_label.pack(side="right")
-    app.errors_count_label = ttk_bs.Label(status_bar, text="[Ошибок: 1]",borderwidth=10, foreground="red", cursor="hand2")
-
-    if app.err_last_session:
-        text = f"Предыдущая сессия была завершена с ошибками. \nКоличество ошибок: {app.err_last_session}. Хотите посмотреть ошибки?"
-        if mes_box.askyesno("Внимание!", text):
-            exec_dir_errors(None, app)
-
-
-
-def destroy_app(app):
-    if app.queue_on_download:  # Срабатывает, если в очереди есть хотя бы один исполнитель
-        res = mes_box.askyesnocancel("Загрузить очередь скачивания?",
-                                     """Окно приложения закроется. \nСкачать выбранных исполнителей?""")
-        if res is True:  # Пользователь нажал "Да"
-            app.destroy_flag = True
-            download_songs(app, dir="DataLib")
-    save_settings_to_disk(app)
-    # app.quit()
-    app.destroy()
-    logger.info("Приложение ЗАКРЫТО")
-def first_start(app):
-
-    def ask(app):
-        mes_box_text = f"Начать загрузку исполнителей c ресурса {app.my_main_url}?"
-        if mes_box.askyesnocancel("Загрузка исполнителей", mes_box_text) and app.my_main_url:
-            reload_artists(app)
-
-    up_frame = ttk_bs.Frame(app)
-    up_frame.pack(anchor="n", fill=ttk_bs.BOTH, expand=True, padx=10)
-
-    # Страница ABOUT
-
-    #     СТРОКА СОСТОЯНИЯ
-    status_bar_text = "[Вы зашли в программу в первый раз. Необходимо загрузить исполнителей]"
-    status_bar = ttk_bs.Frame(app)
-    app.my_st_bar = ttk_bs.Label(status_bar, text=status_bar_text, borderwidth=10, foreground="yellow")
-    status_bar.pack(anchor="n", fill=ttk_bs.BOTH, expand=False, padx=10)
-    app.my_st_bar.pack(side="left")
-
-    app.my_pr_bar = ttk_bs.Progressbar(status_bar, bootstyle="success-striped", length=200)
-    app.my_pr_bar.pack(side="right", padx=5)
-
-
-    ttk_bs.Button(status_bar, text="Начать загрузку", command=lambda: ask(app)).pack(side="right", padx=5)
-
-    ask(app)
-
-
-def init_app(main_data):
-    DELAY = 0.1
-    MAIN_URL = "https://amdm.ru"
-    WINDOW_TITLE = "Chords Parcing"
-
-    app = ttk_bs.Window(themename="superhero")
-
-    app.completed_chars = set()
-    app.my_main_data = main_data
-    app.destroy_flag = False
-    app.resave_data_option = ttk_bs.IntVar(value=0)
-    app.queue_on_download = {}
-    app.errors_count = 0
-    app.window_title = WINDOW_TITLE
-
-    settings = load_settings_from_json()
-    if settings:
-        app.my_delay = settings["delay"] # Задержка при цикличном обращении к сайту
-        app.my_main_url = settings["main_url"]
-        app.err_last_session = settings["errors-last-session"]
-        app.completed_chars = set(settings["completed_chars"])
-    else:
-        app.my_delay = DELAY
-        app.my_main_url = MAIN_URL
-
-    try:
-        app.saved_data = set(load_saved_data_from_json(app))
-    except:
-        app.saved_data = set()
-
-
-    app.title(WINDOW_TITLE)
-    app.geometry("1000x800")
-    app.protocol("WM_DELETE_WINDOW", lambda: destroy_app(app))
-
-    if main_data is None:
-        first_start(app)
-    else:
-        init_widgets(app)
-
-
-    app.mainloop()
-
-
 def main():
-
-
-
     main_data = load_artists_from_json()
     if main_data:
         init_app(main_data)
