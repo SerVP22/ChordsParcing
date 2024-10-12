@@ -10,7 +10,7 @@ import json, os
 
 from Net import *
 from AppGUI import *
-
+from AppGUI import init_widgets
 
 from time import sleep
 from datetime import datetime

@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 import requests
-# from AppGUI import logger
+from AppGUI import logger
 # from ChParcing import check_errors_count
 
 def get_dict_liters_from_main_url(app):

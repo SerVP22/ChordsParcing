@@ -5,8 +5,10 @@ import ttkbootstrap as ttk_bs # Современная надстройка на
 from tkinter import messagebox as mes_box
 import pyautogui
 import tkinter.ttk
+
 from ChParcing import *
-# from Net import check_url
+from Net import check_url
+
 # from ChParcing import download_songs, save_settings_to_disk, reload_artists, \
 #     load_artists_from_json, download_all_data, save_settings_button_press, \
 #     change_url_button_press, load_settings_from_json, load_saved_data_from_json,\
